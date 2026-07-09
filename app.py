@@ -33,7 +33,7 @@ def add_bg_from_local(image_file):
 
 add_bg_from_local('bg.jpg') 
 
-# 🛠️ BASE CSS (Left Questions Area ke liye)
+# 🛠️ BASE CSS (Dark Mode Text Fix + Left Area)
 st.markdown("""
     <style>
     .block-container { 
@@ -47,13 +47,36 @@ st.markdown("""
     }
     header[data-testid="stHeader"] { background-color: transparent !important; }
     
+    /* 🎯 DARK MODE FIX: Force text to be dark inside the main white container */
+    section[data-testid="stMain"] p, 
+    section[data-testid="stMain"] h1, 
+    section[data-testid="stMain"] h2, 
+    section[data-testid="stMain"] h3, 
+    section[data-testid="stMain"] h4, 
+    section[data-testid="stMain"] h5, 
+    section[data-testid="stMain"] h6, 
+    section[data-testid="stMain"] label, 
+    section[data-testid="stMain"] span,
+    section[data-testid="stMain"] div[data-baseweb="radio"] div {
+        color: #0f172a !important; /* Dark Grey/Black text for readability */
+    }
+
     /* Left Panel Navigation Buttons */
+    div.stButton > button { 
+        border-radius: 8px !important; 
+        font-weight: bold !important; 
+        padding: 0.2rem 0.1rem !important; 
+        width: 100%;
+        font-size: 14px !important;
+    }
     div.stButton > button[kind="primary"] { 
-        background-color: #4F46E5 !important; color: white !important; 
+        background-color: #4F46E5 !important; 
+        color: white !important; 
         border-radius: 6px !important; font-weight: bold !important; 
     }
-    div.stButton > button[kind="secondary"] { 
-        border-radius: 6px !important; font-weight: bold !important; 
+    /* Protect Primary Button Text from becoming dark */
+    div.stButton > button[kind="primary"] * {
+        color: white !important;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -81,7 +104,7 @@ if not st.session_state.auth:
     with col2:
         st.write("") 
         with st.container():
-            st.markdown("<h2 style='text-align: center; color:#4F46E5;'>🎓 Study Booster</h2>", unsafe_allow_html=True)
+            st.markdown("<h2 style='text-align: center; color:#4F46E5 !important;'>🎓 Study Booster</h2>", unsafe_allow_html=True)
             st.divider()
             username = st.selectbox("👤 Select Profile", ["-- Select User --"] + list(ALLOWED_USERS.keys()))
             pwd = st.text_input("🔑 Enter Passcode", type="password")
@@ -121,6 +144,12 @@ def load_quiz(file_name, timer_mode, time_minutes):
 # ==========================================
 # 5. DASHBOARD & SIDEBAR
 # ==========================================
+# 🎯 Added Logo in Sidebar
+try:
+    st.sidebar.image("logo.png", use_container_width=True)
+except:
+    st.sidebar.markdown("<h2 style='text-align: center;'>🎓 Study Booster</h2>", unsafe_allow_html=True)
+
 st.sidebar.markdown(f"### 👤 {st.session_state.current_user}")
 st.sidebar.divider()
 menu = st.sidebar.radio("Navigation", ["📚 Dashboard", "📝 Live Exam"])
@@ -198,12 +227,10 @@ elif menu == "📝 Live Exam":
         total_q = len(st.session_state.questions)
         q_data = st.session_state.questions[q_idx]
 
-        # 👈 Left Space (75%) | 👉 Right Space (25%)
         col_main, col_pal = st.columns([3.5, 1.2]) 
         
-        # 📌 RIGHT PANEL (Timer + Palette Grid)
+        # 📌 RIGHT PANEL
         with col_pal:
-            # DOM Injector Master Hack (Python String Replacement se safe kiya gaya hai)
             timer_code = ""
             ui_code = ""
             
@@ -234,18 +261,16 @@ elif menu == "📝 Live Exam":
             <!DOCTYPE html>
             <html><head><style>
             body { margin:0; padding:0; font-family:sans-serif; }
-            .timer-box { background-color:#fee2e2; border:2px solid #ef4444; color:#dc2626; padding:8px 0; border-radius:8px; font-size:20px; font-weight:bold; text-align:center; box-shadow:0 2px 4px rgba(0,0,0,0.1); margin-bottom: 5px; }
-            .no-timer { background-color:#e0f2fe; border-color:#38bdf8; color:#0284c7; }
+            .timer-box { background-color:#fee2e2; border:2px solid #ef4444; color:#dc2626 !important; padding:8px 0; border-radius:8px; font-size:20px; font-weight:bold; text-align:center; box-shadow:0 2px 4px rgba(0,0,0,0.1); margin-bottom: 5px; }
+            .timer-box span { color:#dc2626 !important; }
+            .no-timer { background-color:#e0f2fe; border-color:#38bdf8; color:#0284c7 !important; }
             </style></head><body>
                 __UI_CODE__
                 <script>
                     __TIMER_CODE__
-                    
-                    // 🚀 The Magic Scroll & Sticky Fix 🚀
                     setTimeout(function() {
                         try {
                             var frame = window.frameElement;
-                            // Exact column pakadne ki Ninja Technique
                             var col = frame.closest('div[data-testid="column"]');
                             if(!col) col = frame.parentElement.parentElement.parentElement;
                             
@@ -253,29 +278,24 @@ elif menu == "📝 Live Exam":
                                 col.style.position = '-webkit-sticky';
                                 col.style.position = 'sticky';
                                 col.style.top = '15px';
-                                col.style.height = '85vh'; /* Right Box ki fixed height */
-                                col.style.overflowY = 'auto'; /* Scrollbar sirf yaha aayega */
+                                col.style.height = '85vh'; 
+                                col.style.overflowY = 'auto'; 
                                 col.style.borderLeft = '2px solid #e2e8f0';
                                 col.style.paddingLeft = '10px';
                                 col.style.paddingRight = '5px';
+                                col.classList.add('my-palette');
                                 
-                                col.classList.add('my-palette'); // Class add ki taki style apply ho
-                                
-                                // Parent overflow fix (Streamlit layout zidd todne ke liye)
                                 var main = window.parent.document.querySelector('section[data-testid="stMain"]');
                                 if(main) main.style.overflow = 'visible';
                                 var block = window.parent.document.querySelector('.block-container');
                                 if(block) block.style.overflow = 'visible';
                                 
-                                // 🌟 Round Buttons & Compact Design CSS
                                 if (!window.parent.document.getElementById('palette-css')) {
                                     var style = window.parent.document.createElement('style');
                                     style.id = 'palette-css';
                                     style.innerHTML = `
                                         .my-palette::-webkit-scrollbar { width: 5px; }
                                         .my-palette::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 5px; }
-                                        
-                                        /* Palette ke Gol/Rounded Buttons */
                                         .my-palette div.stButton > button {
                                             padding: 0px !important;
                                             font-size: 13px !important;
@@ -284,10 +304,7 @@ elif menu == "📝 Live Exam":
                                             border-radius: 6px !important;
                                             border: 1px solid #cbd5e1 !important;
                                         }
-                                        /* Grid ke beech ka space kam karna */
-                                        .my-palette div[data-testid="column"] {
-                                            padding: 2px !important;
-                                        }
+                                        .my-palette div[data-testid="column"] { padding: 2px !important; }
                                     `;
                                     window.parent.document.head.appendChild(style);
                                 }
@@ -297,14 +314,12 @@ elif menu == "📝 Live Exam":
                 </script>
             </body></html>
             """
-            # Safe replacement (No bracket error)
             html_hack = html_hack.replace("__UI_CODE__", ui_code).replace("__TIMER_CODE__", timer_code)
             components.html(html_hack, height=60) 
             
             st.markdown("<h5 style='text-align:center; margin-top:5px;'>Question Palette</h5>", unsafe_allow_html=True)
             st.markdown("<p style='text-align:center; font-size:12px; margin-bottom:10px;'>🔵 Curr &nbsp; 🟢 Ans &nbsp; 🔴 Skip &nbsp; ⚪ Unvisit</p>", unsafe_allow_html=True)
             
-            # Palette Buttons
             grid_cols = st.columns(5)
             for i in range(total_q):
                 if i == q_idx: icon = "🔵"
@@ -317,9 +332,9 @@ elif menu == "📝 Live Exam":
                         st.session_state.current_q = i
                         st.rerun()
 
-        # 👈 LEFT PANEL (Main Question Area)
+        # 👈 LEFT PANEL
         with col_main:
-            st.markdown(f"<h3 style='color:#4F46E5; margin-top:0;'>{st.session_state.topic}</h3>", unsafe_allow_html=True)
+            st.markdown(f"<h3 style='color:#4F46E5 !important; margin-top:0;'>{st.session_state.topic}</h3>", unsafe_allow_html=True)
             st.write("---")
             
             st.markdown(f"<h4 style='line-height: 1.5;'>Q{q_idx + 1}. {q_data['q']}</h4>", unsafe_allow_html=True)
