@@ -7,7 +7,7 @@ import base64
 from datetime import datetime
 
 # ==========================================
-# 1. PAGE CONFIGURATION & BACKGROUND LOGIC
+# 1. PAGE CONFIGURATION & FIX-SCROLL CSS
 # ==========================================
 st.set_page_config(page_title="Study Booster", page_icon="🎓", layout="wide", initial_sidebar_state="collapsed")
 
@@ -25,29 +25,54 @@ def add_bg_from_local(image_file):
                 background-position: center;
                 background-attachment: fixed;
             }}
-            /* Content ko padhne layak banane ke liye halka white background */
+            /* Content text readability filter */
             .stApp > header {{ background-color: transparent !important; }}
             div[data-testid="stVerticalBlock"] > div {{
-                background-color: rgba(255, 255, 255, 0.92);
+                background-color: rgba(255, 255, 255, 0.94);
                 border-radius: 12px;
-                padding: 10px;
+                padding: 12px;
             }}
             </style>
             """,
             unsafe_allow_html=True
         )
     except:
-        pass # Agar bg.jpg nahi mili toh normal background chalega
+        pass
 
-# Yahan image ka naam dalein (Apne folder me bg.jpg naam se image rakhein)
 add_bg_from_local('bg.jpg') 
 
+# 🛠️ ULTRA-PRO STICKY & SCROLL CONTAINER CSS
 st.markdown("""
     <style>
     .block-container { padding-top: 1rem !important; padding-bottom: 1rem !important; }
     div.stButton > button { border-radius: 6px !important; font-weight: 600 !important; width: 100%; }
     div.stButton > button[kind="primary"] { background-color: #4F46E5 !important; color: white !important; }
-    .palette-box { background-color: white; padding: 15px; border-radius: 10px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
+    
+    /* 📌 FIXED RIGHT COLUMN: Timer aur Palette ko screen par chipka ke rakhega */
+    div[data-testid="stColumn"]:nth-child(2) {
+        position: -webkit-sticky;
+        position: sticky;
+        top: 20px;
+        align-self: start;
+        z-index: 99;
+    }
+    
+    /* 🔄 INDEPENDENT PALETTE SCROLL: Sirf boxes wale dibbe me scroll bar aayega */
+    .palette-box {
+        background-color: white;
+        padding: 15px;
+        border-radius: 10px;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        max-height: 380px;       /* Fixed height taaki screen se bahar na jaye */
+        overflow-y: auto;        /* Swatantra (Independent) Scrolling */
+        border: 1px solid #E2E8F0;
+    }
+    
+    /* Scrollbar ko thoda patla aur professional banana */
+    .palette-box::-webkit-scrollbar { width: 6px; }
+    .palette-box::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 10px; }
+    .palette-box::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+    .palette-box::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -105,15 +130,29 @@ def load_quiz(file_name, timer_mode, time_minutes):
             })
     st.session_state.topic = os.path.splitext(file_name)[0].replace("_", " ")
     st.session_state.quiz_ready = True
-    st.session_state.exam_started = False # Exam abhi shuru nahi hua hai
+    st.session_state.exam_started = False 
     st.session_state.quiz_completed = False
     st.session_state.current_q = 0
     st.session_state.user_answers = {}
     st.session_state.visited_questions = {0}
-    
-    # Store timer info for later
     st.session_state.timer_mode = timer_mode
     st.session_state.time_val = time_minutes
+
+def generate_report(score, total):
+    report = f"🎓 STUDY BOOSTER - OFFICIAL REPORT CARD 🎓\n"
+    report += f"Candidate: {st.session_state.current_user}\n"
+    report += f"Subject: {st.session_state.topic}\n"
+    report += f"Date: {datetime.now().strftime('%d-%b-%Y %I:%M %p')}\n"
+    report += "="*40 + "\n"
+    report += f"SCORE: {score} out of {total}\n"
+    report += "="*40 + "\n\n--- DETAILED ANSWER KEY ---\n"
+    for i, q in enumerate(st.session_state.questions):
+        report += f"Q{i+1}: {q['q']}\n"
+        user_ans = st.session_state.user_answers.get(i, "Not Attempted")
+        correct_ans = q['options'][q['ans']]
+        report += f"Your Answer: {user_ans}\n"
+        report += f"Correct Answer: {correct_ans}\n\n"
+    return report
 
 # ==========================================
 # 5. SIDEBAR
@@ -184,7 +223,6 @@ elif menu == "📝 Live Exam":
         with c2:
             if st.button("✅ I am ready to begin", type="primary"):
                 st.session_state.exam_started = True
-                # Start the timer exactly when they click Start
                 if st.session_state.timer_mode == "Total Time (Minutes)":
                     st.session_state.end_time = time.time() + (st.session_state.time_val * 60)
                 st.rerun()
@@ -238,7 +276,7 @@ elif menu == "📝 Live Exam":
                 st.info(f"Correct Answer: {correct_ans}")
             st.write("---")
             
-    # --- PHASE 3: ACTIVE EXAM SCREEN ---
+    # --- PHASE 3: ACTIVE EXAM SCREEN (FIXED SCROLL LAYOUT) ---
     else:
         if st.session_state.timer_mode == "Total Time (Minutes)":
             remaining_time = st.session_state.end_time - time.time()
@@ -251,10 +289,11 @@ elif menu == "📝 Live Exam":
         total_q = len(st.session_state.questions)
         q_data = st.session_state.questions[q_idx]
 
+        # 2 Column layout
         col_main, col_pal = st.columns([3, 1])
         
+        # RIGHT PANEL: Timer + Palette Box (Ab ye page ke sath scroll nahi hoga!)
         with col_pal:
-            # FIXED TIMER HEIGHT & PADDING so it doesn't get cut off!
             if st.session_state.timer_mode == "Total Time (Minutes)":
                 rem_sec = int(st.session_state.end_time - time.time())
                 timer_html = f"""
@@ -292,13 +331,12 @@ elif menu == "📝 Live Exam":
                 </body>
                 </html>
                 """
-                # Increased height to 85 to prevent clipping
                 components.html(timer_html, height=85) 
             
+            # Palette container with independent scrolling
             st.markdown("<div class='palette-box'>", unsafe_allow_html=True)
-            st.markdown("<h5 style='text-align:center;'>Question Palette</h5>", unsafe_allow_html=True)
-            st.markdown("<small>🔵 Current &nbsp; 🟢 Answered <br> 🔴 Skipped &nbsp;&nbsp; ⚪ Unvisited</small>", unsafe_allow_html=True)
-            st.write("")
+            st.markdown("<h5 style='text-align:center; margin-top:0;'>Question Palette</h5>", unsafe_allow_html=True)
+            st.markdown("<p style='text-align:center; font-size:11px; margin-bottom:10px;'>🔵 Curr &nbsp; 🟢 Ans &nbsp; 🔴 Skip &nbsp; ⚪ Unvisit</p>", unsafe_allow_html=True)
             
             grid_cols = st.columns(4)
             for i in range(total_q):
@@ -313,6 +351,7 @@ elif menu == "📝 Live Exam":
                         st.rerun()
             st.markdown("</div>", unsafe_allow_html=True)
 
+        # LEFT PANEL: Main Question Area
         with col_main:
             st.markdown(f"<h3 style='color:#4F46E5; margin-top:0;'>{st.session_state.topic}</h3>", unsafe_allow_html=True)
             st.write("---")
