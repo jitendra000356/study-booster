@@ -145,7 +145,6 @@ def save_timers_data(data):
 # ==========================================
 def init_session():
     """Initialize all session state variables safely with refresh persistence support."""
-    # --- DEFAULT INITIALIZATION DICTIONARY ---
     default_state = {
         'auth': False, 
         'current_user': "", 
@@ -166,10 +165,9 @@ def init_session():
         'current_test_filename': "",
         'attempt_recorded': False,
         'admin_current_path': "",
-        'sid': "" # Track current persistent session ID
+        'sid': ""
     }
 
-    # --- PERSISTENT REFRESH LOGIC ---
     query_params = st.query_params
     sid = query_params.get("sid", None)
     
@@ -186,7 +184,6 @@ def init_session():
             except Exception:
                 pass 
                 
-    # --- DEFAULT INITIALIZATION ---
     for key, value in default_state.items():
         if key not in st.session_state:
             st.session_state[key] = value
@@ -294,7 +291,6 @@ def load_quiz(file_name):
     st.session_state.attempt_recorded = False
 
 def calculate_score():
-    """Calculates final score dynamically and safely."""
     score = 0
     for i, q in enumerate(st.session_state.questions):
         correct_ans = q['options'][q['ans']] if 0 <= q['ans'] < len(q['options']) else None
@@ -334,7 +330,6 @@ def clear_answer(q_idx):
         st.session_state[f"radio_ans_{q_idx}"] = None
 
 def toggle_mark(q_idx):
-    """Toggles the 'Marked for Review' state for a specific question."""
     record_activity()
     if not st.session_state.is_paused:
         if q_idx in st.session_state.marked_questions:
@@ -355,7 +350,6 @@ def on_radio_change(q_idx):
 # 5. CSS & JAVASCRIPT INJECTION
 # ==========================================
 def inject_custom_css():
-    """Injects responsive, modern, and bug-free CSS."""
     try:
         with open('bg.jpg', "rb") as image_file:
             encoded_string = base64.b64encode(image_file.read())
@@ -440,7 +434,6 @@ def inject_custom_css():
     """, unsafe_allow_html=True)
 
 def render_visual_timer():
-    """Renders a 100% safe, read-only HTML timer that doesn't trigger endless reruns."""
     is_timed = (st.session_state.timer_mode == "Total Time (Minutes)")
     rem_sec = int(max(0, st.session_state.remaining_seconds))
     
@@ -508,7 +501,6 @@ def render_visual_timer():
 # ==========================================
 
 def render_login():
-    """Renders the secure login portal."""
     st.write("<br><br><br>", unsafe_allow_html=True)
     col1, col2, col3 = st.columns([1, 1.5, 1]) 
     with col2:
@@ -536,7 +528,6 @@ def render_login():
                     st.error("❌ Invalid Credentials! Please try again.")
 
 def render_sidebar():
-    """Renders the standard navigation sidebar."""
     try:
         st.sidebar.image("logo.png", use_container_width=True)
     except:
@@ -566,13 +557,11 @@ def render_sidebar():
         st.rerun()
 
 def render_dashboard():
-    """Renders the main dashboard for loading and starting tests."""
     st.markdown("<h1 style='color: #1e293b;'>Welcome to Study Booster! 🚀</h1>", unsafe_allow_html=True)
     st.markdown("<p style='font-size: 1.1rem; color: #475569;'>Select a test series below to begin.</p>", unsafe_allow_html=True)
     st.write("---")
     
     if "Admin" in st.session_state.current_user:
-        
         with st.expander("📁 Admin Panel: Question Bank Management", expanded=False):
             current_admin_path = st.session_state.get('admin_current_path', '')
             full_admin_path = os.path.join(CSV_FOLDER, current_admin_path.replace('/', os.sep))
@@ -767,7 +756,6 @@ def render_dashboard():
                 st.rerun()
 
 def render_instructions():
-    """Renders the pre-exam instructions page."""
     st.markdown(f"<h1 style='color: #4F46E5; text-align: center;'>📜 Instructions</h1>", unsafe_allow_html=True)
     st.markdown(f"<h3 style='text-align: center; color: #475569;'>{st.session_state.topic}</h3>", unsafe_allow_html=True)
     st.divider()
@@ -800,7 +788,6 @@ def render_instructions():
                 st.rerun()
 
 def render_paused_screen():
-    """Renders a simple, reliable screen when the test is paused."""
     st.write("<br><br>", unsafe_allow_html=True)
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
@@ -816,7 +803,6 @@ def render_paused_screen():
                 st.rerun()
 
 def render_exam():
-    """Renders the main Examination Layout, securely executing state interactions."""
     if st.session_state.is_paused:
         render_paused_screen()
         return
@@ -826,9 +812,9 @@ def render_exam():
     total_q = len(st.session_state.questions)
     q_data = st.session_state.questions[q_idx]
 
+    # Keeping standard CSS for the rest of the right panel (excluding the custom HTML grid)
     st.markdown("""
     <style>
-    /* Question Panel (Right Column) Complete Redesign */
     div[data-testid="column"]:nth-of-type(2) {
         background-color: #f0f8ff !important;
         border: 1px solid #bfdbfe !important;
@@ -836,42 +822,13 @@ def render_exam():
         padding-bottom: 15px !important;
         overflow: hidden; 
     }
-    
-    div[data-testid="column"]:nth-of-type(2) div[data-testid="stHorizontalBlock"]:nth-of-type(1) button {
-        aspect-ratio: 1 / 1 !important;
-        width: 100% !important;
-        border-radius: 4px !important;
-        border: 1px solid #cbd5e1 !important;
-        padding: 0 !important;
-        font-size: 13px !important; 
-        font-weight: 600 !important;
-        background-color: #ffffff !important;
-        color: #334155 !important;
-        min-width: 0 !important; 
-        min-height: 0 !important; 
-        line-height: 1 !important;
-        display: flex !important;
-        align-items: center !important;
-        justify-content: center !important;
-        position: relative !important;
-        transition: all 0.2s ease !important;
-    }
-
-    div[data-testid="column"]:nth-of-type(2) div[data-testid="stHorizontalBlock"]:nth-of-type(1) button p {
-        margin: 0 !important;
-        padding: 0 !important;
-        font-size: 13px !important;
-        white-space: nowrap !important; 
-    }
-    
-    div[data-testid="column"]:nth-of-type(2) > div[data-testid="stVerticalBlock"] > div[data-testid="stHorizontalBlock"]:nth-of-type(2) div.stButton > button {
+    div[data-testid="column"]:nth-of-type(2) > div[data-testid="stVerticalBlock"] > div[data-testid="stHorizontalBlock"] div.stButton > button {
         background-color: #dbeafe !important;
         color: #1e40af !important;
         border: none !important;
         font-size: 13px !important;
         border-radius: 4px !important;
     }
-    
     div[data-testid="column"]:nth-of-type(2) > div[data-testid="stVerticalBlock"] > div:last-child div.stButton > button {
         background-color: #0ea5e9 !important;
         color: white !important;
@@ -879,13 +836,6 @@ def render_exam():
         font-size: 14px !important;
         border-radius: 4px !important;
         margin-top: 5px !important;
-    }
-    
-    @media (max-width: 768px) {
-        div[data-testid="column"]:nth-of-type(2) div[data-testid="stHorizontalBlock"]:nth-of-type(1) button {
-            max-width: 50px !important;
-            margin: 0 auto !important;
-        }
     }
     </style>
     """, unsafe_allow_html=True)
@@ -961,71 +911,135 @@ def render_exam():
             </div>""", 
             unsafe_allow_html=True
         )
+
+        # ---------------------------------------------------------
+        # PURE HTML/JS/CSS QUESTION PALETTE
+        # ---------------------------------------------------------
+        grid_html = ""
+        for i in range(total_q):
+            is_ans = st.session_state.user_answers.get(i) is not None
+            is_vis = i in st.session_state.visited_questions
+            is_mark = i in st.session_state.marked_questions
+            is_curr = (i == q_idx)
+            
+            classes = ["q-btn"]
+            if is_ans and is_mark:
+                classes.append("answeredmarked")
+            elif is_ans:
+                classes.append("answered")
+            elif is_mark:
+                classes.append("marked")
+            elif is_vis:
+                classes.append("notanswered")
+            else:
+                classes.append("notvisited")
+                
+            if is_curr:
+                classes.append("current")
+                
+            grid_html += f'<div class="{" ".join(classes)}" data-idx="{i}">{i+1}</div>\n'
+            
+        full_html = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+        <style>
+        body {{ margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: transparent; }}
+        .palette-grid {{
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 8px;
+            padding: 5px;
+        }}
+        .q-btn {{
+            aspect-ratio: 1 / 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            border-radius: 4px;
+            border: 1px solid #cbd5e1;
+            user-select: none;
+            transition: transform 0.1s ease;
+        }}
+        .q-btn:hover {{ transform: scale(1.05); }}
+        .notvisited {{ background: #ffffff; color: #000000; border-color: #cbd5e1; }}
+        .notanswered {{ background: #e55a45; color: #ffffff; border-color: #e55a45; border-radius: 0 0 15px 15px; }}
+        .answered {{ background: #2bc765; color: #ffffff; border-color: #2bc765; border-radius: 15px 15px 0 0; }}
+        .marked {{ background: #9d48b1; color: #ffffff; border-color: #9d48b1; border-radius: 50%; }}
+        .answeredmarked {{ background: #9d48b1; color: #ffffff; border-color: #9d48b1; border-radius: 50%; position: relative; overflow: visible; }}
+        .answeredmarked::after {{
+            content: ''; position: absolute; bottom: -2px; right: -2px; width: 8px; height: 8px;
+            background-color: #2bc765; border-radius: 50%; border: 1px solid white; z-index: 3;
+        }}
+        .current {{ outline: 3px solid #2563eb; outline-offset: 2px; transform: scale(1.05); z-index: 2; }}
+        </style>
+        </head>
+        <body>
+        <div class="palette-grid">
+            {grid_html}
+        </div>
         
-        try:
-            palette_scroll = st.container(height=350, border=False)
-        except TypeError:
-            try:
-                palette_scroll = st.container(height=350)
-            except TypeError:
-                palette_scroll = st.container()
-
-        dynamic_css_blocks = []
-
-        with palette_scroll:
-            grid_cols = st.columns(5)
-            for i in range(total_q):
-                is_ans = st.session_state.user_answers.get(i) is not None
-                is_vis = i in st.session_state.visited_questions
-                is_mark = i in st.session_state.marked_questions
-                is_curr = (i == q_idx)
-                
-                c = (i % 5) + 1
-                r = (i // 5) + 1
-                
-                # Highly robust structurally-isolated selector:
-                # Guarantees exact hit on the actual r-th button container inside the column, bypassing injected hidden layout divs.
-                base_first_container = 'div.element-container:not(div.element-container ~ div.element-container)'
-                row_selector = base_first_container + (' + div.element-container' * (r - 1))
-                
-                selector = f'div[data-testid="column"]:nth-of-type(2) div[data-testid="stHorizontalBlock"]:nth-of-type(1) div[data-testid="column"]:nth-of-type({c}) {row_selector} button'
-                
-                css_rule = ""
-                
-                # Exact Status Colors matching requirements
-                if is_ans and is_mark:
-                    # Answered & Marked: Purple background, Small green indicator/checkmark, White text
-                    css_rule += f"{selector} {{ background-color: #9d48b1 !important; border-color: #9d48b1 !important; color: white !important; border-radius: 50% !important; overflow: visible !important; }} "
-                    css_rule += f"{selector} p {{ color: white !important; }} "
-                    css_rule += f"{selector}::after {{ content: ''; position: absolute; bottom: -2px; right: -2px; width: 10px; height: 10px; background-color: #2bc765; border-radius: 50%; border: 2px solid white; z-index: 3; }} "
-                elif is_ans:
-                    # Answered: Green background, White text
-                    css_rule += f"{selector} {{ background-color: #2bc765 !important; border-color: #2bc765 !important; color: white !important; border-radius: 50px 50px 0 0 !important; }} "
-                    css_rule += f"{selector} p {{ color: white !important; }} "
-                elif is_mark:
-                    # Marked for Review: Purple background, White text
-                    css_rule += f"{selector} {{ background-color: #9d48b1 !important; border-color: #9d48b1 !important; color: white !important; border-radius: 50% !important; }} "
-                    css_rule += f"{selector} p {{ color: white !important; }} "
-                elif is_vis:
-                    # Visited but Not Answered: Red background, White text
-                    css_rule += f"{selector} {{ background-color: #e55a45 !important; border-color: #e55a45 !important; color: white !important; border-radius: 0 0 50px 50px !important; }} "
-                    css_rule += f"{selector} p {{ color: white !important; }} "
-                else:
-                    # Not Visited: White background, Black text, Gray border
-                    css_rule += f"{selector} {{ background-color: #ffffff !important; border-color: #cbd5e1 !important; color: black !important; border-radius: 4px !important; }} "
-                    css_rule += f"{selector} p {{ color: black !important; }} "
-                
-                # Current Highlight Overlay (Additionally show a blue border)
-                if is_curr:
-                    css_rule += f"{selector} {{ outline: 3px solid #2563eb !important; outline-offset: 2px !important; transform: scale(1.05) !important; z-index: 2; }} "
+        <script>
+            document.addEventListener("DOMContentLoaded", function() {{
+                try {{
+                    const parentDoc = window.parent.document;
                     
-                dynamic_css_blocks.append(css_rule)
-                
-                with grid_cols[i % 5]:
-                    st.button(f"{i+1}", key=f"pal_{i}", on_click=nav_goto, args=(i,))
+                    // Identify Streamlit buttons created specifically as background triggers
+                    const stButtons = parentDoc.querySelectorAll('button[title^="hbtn_tag_"]');
+                    const hiddenMap = {{}};
 
-        # Inject perfectly mapped CSS directly following the container block
-        st.markdown(f"<style>{''.join(dynamic_css_blocks)}</style>", unsafe_allow_html=True)
+                    stButtons.forEach(b => {{
+                        // Fallback: hide them completely via JS if CSS didn't catch them
+                        const container = b.closest('div[data-testid="element-container"]');
+                        if (container) container.style.display = 'none';
+                        
+                        let idx = b.getAttribute('title').split('_')[2]; 
+                        hiddenMap[idx] = b;
+                    }});
+
+                    // Bind HTML click to the invisible Streamlit button click
+                    const gridItems = document.querySelectorAll('.q-btn');
+                    gridItems.forEach(item => {{
+                        item.addEventListener('click', function() {{
+                            let idx = this.getAttribute('data-idx');
+                            if(hiddenMap[idx]) {{
+                                hiddenMap[idx].click();
+                            }}
+                        }});
+                    }});
+                }} catch (e) {{
+                    console.error("Iframe bridging blocked:", e);
+                }}
+            }});
+        </script>
+        </body>
+        </html>
+        """
+        
+        components.html(full_html, height=350, scrolling=True)
+
+        # ---------------------------------------------------------
+        # THE HIDDEN BUTTONS HACK (Engine)
+        # CSS to instantly hide the containers of these trigger buttons to prevent layout shifting
+        # ---------------------------------------------------------
+        st.markdown('''
+        <style>
+        div[data-testid="element-container"]:has(button[title^="hbtn_tag_"]) {
+            display: none !important;
+            height: 0 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+        }
+        </style>
+        ''', unsafe_allow_html=True)
+        
+        for i in range(total_q):
+            st.button(f"H{i}", key=f"hbtn_{i}", help=f"hbtn_tag_{i}", on_click=nav_goto, args=(i,))
+
+        # ---------------------------------------------------------
                     
         st.markdown("<div style='margin-top: 15px;'></div>", unsafe_allow_html=True)
         b1, b2 = st.columns(2)
@@ -1092,7 +1106,6 @@ def render_exam():
             st.button("🚀 Final Submit", type="primary", on_click=nav_submit, use_container_width=True)
 
 def render_result():
-    """Renders the detailed post-exam result analysis."""
     total_q = len(st.session_state.questions)
     score = calculate_score()
     attempted = len(st.session_state.user_answers)
