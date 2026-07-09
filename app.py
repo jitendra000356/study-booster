@@ -812,7 +812,7 @@ def render_exam():
     total_q = len(st.session_state.questions)
     q_data = st.session_state.questions[q_idx]
 
-    # Keeping standard CSS for the rest of the right panel (excluding the custom HTML grid)
+    # Keeping standard CSS for the rest of the right panel and completely hiding the 3rd column
     st.markdown("""
     <style>
     div[data-testid="column"]:nth-of-type(2) {
@@ -822,6 +822,17 @@ def render_exam():
         padding-bottom: 15px !important;
         overflow: hidden; 
     }
+    
+    /* 100% Reliable Invisible Column for Hidden Engine */
+    div[data-testid="column"]:nth-of-type(3) {
+        display: none !important;
+        width: 0 !important;
+        height: 0 !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        overflow: hidden !important;
+    }
+    
     div[data-testid="column"]:nth-of-type(2) > div[data-testid="stVerticalBlock"] > div[data-testid="stHorizontalBlock"] div.stButton > button {
         background-color: #dbeafe !important;
         color: #1e40af !important;
@@ -840,7 +851,8 @@ def render_exam():
     </style>
     """, unsafe_allow_html=True)
 
-    col_main, col_pal = st.columns([7, 3]) 
+    # Adding a 3rd hidden column to securely tuck away our trigger buttons
+    col_main, col_pal, col_hidden = st.columns([7, 3, 0.1]) 
     
     ans_count = 0
     ans_marked_count = 0
@@ -987,17 +999,15 @@ def render_exam():
                 try {{
                     const parentDoc = window.parent.document;
                     
-                    // Identify Streamlit buttons created specifically as background triggers
-                    const stButtons = parentDoc.querySelectorAll('button[title^="hbtn_tag_"]');
+                    // Identify Streamlit buttons without needing unreliable CSS selectors
+                    const stButtons = parentDoc.querySelectorAll('button');
                     const hiddenMap = {{}};
 
                     stButtons.forEach(b => {{
-                        // Fallback: hide them completely via JS if CSS didn't catch them
-                        const container = b.closest('div[data-testid="element-container"]');
-                        if (container) container.style.display = 'none';
-                        
-                        let idx = b.getAttribute('title').split('_')[2]; 
-                        hiddenMap[idx] = b;
+                        if (b.innerText && b.innerText.includes('HBTN_')) {{
+                            let idx = b.innerText.split('_')[1].trim(); 
+                            hiddenMap[idx] = b;
+                        }}
                     }});
 
                     // Bind HTML click to the invisible Streamlit button click
@@ -1021,26 +1031,6 @@ def render_exam():
         
         components.html(full_html, height=350, scrolling=True)
 
-        # ---------------------------------------------------------
-        # THE HIDDEN BUTTONS HACK (Engine)
-        # CSS to instantly hide the containers of these trigger buttons to prevent layout shifting
-        # ---------------------------------------------------------
-        st.markdown('''
-        <style>
-        div[data-testid="element-container"]:has(button[title^="hbtn_tag_"]) {
-            display: none !important;
-            height: 0 !important;
-            margin: 0 !important;
-            padding: 0 !important;
-        }
-        </style>
-        ''', unsafe_allow_html=True)
-        
-        for i in range(total_q):
-            st.button(f"H{i}", key=f"hbtn_{i}", help=f"hbtn_tag_{i}", on_click=nav_goto, args=(i,))
-
-        # ---------------------------------------------------------
-                    
         st.markdown("<div style='margin-top: 15px;'></div>", unsafe_allow_html=True)
         b1, b2 = st.columns(2)
         with b1:
@@ -1049,6 +1039,12 @@ def render_exam():
             st.button("Instructions", use_container_width=True, key="btn_inst")
             
         st.button("Submit Test", type="primary", use_container_width=True, key="btn_sub_right", on_click=nav_submit)
+
+    # ================== HIDDEN ENGINE PANEL ==================
+    # This 3rd column renders all the trigger buttons securely, but is 100% hidden by CSS
+    with col_hidden:
+        for i in range(total_q):
+            st.button(f"HBTN_{i}", key=f"hbtn_{i}", on_click=nav_goto, args=(i,))
 
     # ================== LEFT PANEL ==================
     with col_main:
