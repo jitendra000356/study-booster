@@ -1,40 +1,3 @@
-### 🛠️ DEBUG REPORT
-
-**1. Critical Bug: Infinite Rerun & White Screen (Timer / Auto-Pause Crash)**
-
-* **Root Cause:** The `inject_timer_and_autopause_js` function injected an HTML component running a `setInterval` that used `window.parent.document.querySelectorAll('button')` to click standard Streamlit buttons (like `AutoPauseTrigger` or `Final Submit`). Because Streamlit runs components in an iframe, constantly interacting with the parent DOM aggressively triggers React state updates. On top of that, every rerun injected a *new* interval, causing an avalanche of clicks, resulting in an infinite rerun loop and eventually a white screen.
-* **File Location:** `inject_timer_and_autopause_js()` and `render_exam()`
-* **Fix:** Completely removed the unsafe JavaScript DOM manipulation. Replaced the auto-pause and timer logic with a **server-side timestamp architecture**. Time tracking is now done mathematically using Python's `time.time()`. The visual timer is now a safe, isolated read-only JS script that doesn't interact with the parent window.
-
-**2. State Corruption Bug: Question Radio Buttons Losing State**
-
-* **Root Cause:** The code used a dynamically changing key for the radio buttons: `key=f"rad_{q_idx}_{clear_key}"`. When the key dynamically changes or evaluates out-of-bounds, Streamlit drops the component from the state tree, leading to unhandled `ValueError` crashes and wiped user answers when navigating back and forth.
-* **File Location:** `render_exam()`
-* **Fix:** Bound the radio button safely to session state using a static key (`f"radio_ans_{q_idx}"`). Used Streamlit's native `index` properties and handled the `on_change` callback natively to synchronize answers with `st.session_state.user_answers`.
-
-**3. Bug: Navigation / Layout Freezing & "Sticky Palette" Breaking Mobile UI**
-
-* **Root Cause:** The application attempted to force CSS `position: sticky` onto a Streamlit layout column via injected JavaScript (`col.style.position = '-webkit-sticky'`). This broke responsive flexbox calculations, causing extreme layout glitches on mobile devices and overlapping elements.
-* **File Location:** `inject_timer_and_autopause_js()`
-* **Fix:** Removed the sticky JS script completely. Relied strictly on Streamlit's native `st.columns()` capability, which correctly and gracefully stacks the main question window above the palette window natively on mobile screens.
-
-**4. Data Error: CSV Parsing Failing on Empty Options**
-
-* **Root Cause:** `q_data['options']` rigidly extracted exactly 5 options: `[row['Option1'], ..., row['Option5']]`. If a CSV contained a question with only 3 or 4 options, it rendered empty strings as valid radio options, crashing the index-matching function.
-* **File Location:** `load_quiz()`
-* **Fix:** Implemented a list comprehension to dynamically check and load only non-empty option strings during CSV parsing.
-
-**5. Logic Flaw: Missing robust Pause/Resume Lifecycle**
-
-* **Root Cause:** The `is_paused` flag was disconnected from the timer logic. If paused, time kept running in the background. If the user resumed, their exam would instantly submit.
-* **File Location:** `render_exam()`, `pause_exam()`
-* **Fix:** Overhauled the timer ecosystem using `last_calc_time` and `last_interaction_time`. Time only ticks away natively during an active session, pausing mathematically freezes the timer, and resuming restores the exact state perfectly.
-
----
-
-### 💻 COMPLETE APPLICATION (`study_booster_app.py`)
-
-```python
 import streamlit as st
 import streamlit.components.v1 as components
 import csv
@@ -703,5 +666,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-```
