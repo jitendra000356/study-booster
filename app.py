@@ -590,10 +590,13 @@ def render_exam():
         border-radius: 4px !important;
         border: 1px solid #cbd5e1 !important;
         padding: 0 !important;
-        font-size: 14px !important;
+        font-size: 13px !important; /* Reduced slightly to fit double digits */
         font-weight: 600 !important;
         background-color: #ffffff !important;
         color: #334155 !important;
+        min-width: 0 !important; /* Forces uniform shape */
+        min-height: 0 !important; /* Forces uniform shape */
+        line-height: 1 !important;
     }
 
     .cbt-btn-wrapper.cbt-answered div.stButton > button {
@@ -658,43 +661,39 @@ def render_exam():
         avatar_letter = username_display[0].upper() if username_display else "U"
         
         # Testbook-style Profile & Legend Redesign
+        # Note: HTML is strictly left-aligned to prevent Streamlit's Markdown parser from mistakenly treating it as a raw code block.
         html_legend = f"""
-        <div style="background-color: #ffffff; padding: 15px; border-bottom: 1px solid #bfdbfe; margin: 10px -1.5rem 0 -1.5rem;">
-            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
-                <div style="width: 34px; height: 34px; background-color: #3b82f6; color: white; border-radius: 50%; display: flex; justify-content: center; align-items: center; font-weight: bold; font-size: 16px;">
-                    <img src="https://ui-avatars.com/api/?name={username_display}&background=3b82f6&color=fff&rounded=true&bold=true&size=34" style="border-radius: 50%;" onerror="this.style.display='none'; this.parentElement.innerText='{avatar_letter}';">
-                </div>
-                <span style="font-weight: 600; color: #1e293b; font-size: 15px;">{username_display}</span>
-            </div>
-            
-            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px 4px; font-size: 11px; color: #475569;">
-                <div style="display: flex; align-items: center; gap: 4px;">
-                    <div style="width: 18px; height: 18px; background-color: #2bc765; color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 10px;">{ans_count}</div>
-                    <span>Answered</span>
-                </div>
-                <div style="display: flex; align-items: center; gap: 4px;">
-                    <div style="width: 18px; height: 18px; background-color: #9d48b1; color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 10px;">0</div>
-                    <span>Marked</span>
-                </div>
-                <div style="display: flex; align-items: center; gap: 4px;">
-                    <div style="width: 18px; height: 18px; background-color: #ffffff; border: 1px solid #cbd5e1; color: #333; border-radius: 3px; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 10px;">{not_visit_count}</div>
-                    <span>Not Visited</span>
-                </div>
-                <div style="display: flex; align-items: center; gap: 4px; grid-column: span 2;">
-                    <div style="width: 18px; height: 18px; background-color: #9d48b1; color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 10px; position: relative;">
-                        0
-                        <div style="position: absolute; bottom: -2px; right: -2px; width: 8px; height: 8px; background-color: #2bc765; border-radius: 50%; border: 1px solid white;"></div>
-                    </div>
-                    <span>Marked and answered</span>
-                </div>
-                <div style="display: flex; align-items: center; gap: 4px;">
-                    <div style="width: 18px; height: 18px; background-color: #e55a45; color: white; border-radius: 3px; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 10px;">
-                    {not_ans_count}</div>
-                    <span>Not Answered</span>
-                </div>
-            </div>
-        </div>
-        """
+<div style="background-color: #ffffff; padding: 15px; border-bottom: 1px solid #bfdbfe; margin: 10px -1.5rem 0 -1.5rem;">
+<div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
+<div style="width: 34px; height: 34px; background-color: #3b82f6; color: white; border-radius: 50%; display: flex; justify-content: center; align-items: center; font-weight: bold; font-size: 16px;">
+<img src="https://ui-avatars.com/api/?name={username_display}&background=3b82f6&color=fff&rounded=true&bold=true&size=34" style="border-radius: 50%;" onerror="this.style.display='none'; this.parentElement.innerText='{avatar_letter}';">
+</div>
+<span style="font-weight: 600; color: #1e293b; font-size: 15px;">{username_display}</span>
+</div>
+<div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px 4px; font-size: 11px; color: #475569;">
+<div style="display: flex; align-items: center; gap: 4px;">
+<div style="width: 18px; height: 18px; background-color: #2bc765; color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 10px;">{ans_count}</div>
+<span>Answered</span>
+</div>
+<div style="display: flex; align-items: center; gap: 4px;">
+<div style="width: 18px; height: 18px; background-color: #9d48b1; color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 10px;">0</div>
+<span>Marked</span>
+</div>
+<div style="display: flex; align-items: center; gap: 4px;">
+<div style="width: 18px; height: 18px; background-color: #ffffff; border: 1px solid #cbd5e1; color: #333; border-radius: 3px; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 10px;">{not_visit_count}</div>
+<span>Not Visited</span>
+</div>
+<div style="display: flex; align-items: center; gap: 4px; grid-column: span 2;">
+<div style="width: 18px; height: 18px; background-color: #9d48b1; color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 10px; position: relative;">0<div style="position: absolute; bottom: -2px; right: -2px; width: 8px; height: 8px; background-color: #2bc765; border-radius: 50%; border: 1px solid white;"></div></div>
+<span>Marked and answered</span>
+</div>
+<div style="display: flex; align-items: center; gap: 4px;">
+<div style="width: 18px; height: 18px; background-color: #e55a45; color: white; border-radius: 3px; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 10px;">{not_ans_count}</div>
+<span>Not Answered</span>
+</div>
+</div>
+</div>
+"""
         st.markdown(html_legend, unsafe_allow_html=True)
         
         # Testbook-style Section Header
