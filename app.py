@@ -241,18 +241,47 @@ elif menu == "📝 Live Exam":
     # --- PHASE 2: RESULT SCREEN ---
     if st.session_state.quiz_completed:
         total_q = len(st.session_state.questions)
-        score = sum(1 for i, q in enumerate(st.session_state.questions) if st.session_state.user_answers.get(i) == q['options'][q['ans']])
+        score = sum(1 for i, q in enumerate(st.session_state.questions)
+                    if st.session_state.user_answers.get(i) == q['options'][q['ans']])
+
+        attempted = len(st.session_state.user_answers)
+        skipped = total_q - attempted
+        wrong = attempted - score
+
         st.header("🏆 Performance Analysis")
-        st.metric("Final Score", f"{score} / {total_q}")
+
+        c1,c2,c3,c4 = st.columns(4)
+        c1.metric("✅ Correct", score)
+        c2.metric("❌ Wrong", wrong)
+        c3.metric("⚪ Skipped", skipped)
+        c4.metric("🎯 Score", f"{score}/{total_q}")
+
+        st.progress(score/total_q if total_q else 0)
         st.divider()
-        st.markdown("### 📋 Detailed Answer Key")
-        for i, q in enumerate(st.session_state.questions):
-            st.markdown(f"**Q{i+1}: {q['q']}**")
-            correct_ans = q['options'][q['ans']]
-            user_ans = st.session_state.user_answers.get(i)
-            if user_ans == correct_ans: st.success(f"Your: {user_ans} (✅)")
-            elif user_ans is None: st.warning(f"Not Attempted. Correct: {correct_ans}")
-            else: st.error(f"Your: {user_ans} (❌) | Correct: {correct_ans}")
+        st.subheader("📋 Detailed Answer Review")
+
+        page_size=10
+        total_pages=(total_q-1)//page_size+1
+        page=st.number_input("Result Page",1,total_pages,1)
+
+        start=(page-1)*page_size
+        end=min(start+page_size,total_q)
+
+        for i in range(start,end):
+            q=st.session_state.questions[i]
+            correct=q['options'][q['ans']]
+            user=st.session_state.user_answers.get(i)
+
+            st.markdown(f"### Q{i+1}. {q['q']}")
+            if user==correct:
+                st.success(f"✅ Your Answer: {user}")
+            elif user is None:
+                st.warning("⚪ Not Attempted")
+                st.info(f"Correct Answer: {correct}")
+            else:
+                st.error(f"❌ Your Answer: {user}")
+                st.success(f"✅ Correct Answer: {correct}")
+            st.divider()
         st.stop()
             
     # --- PHASE 3: ACTIVE EXAM ---
