@@ -9,7 +9,6 @@ from datetime import datetime
 # ==========================================
 # 1. PAGE CONFIGURATION & SPACE UTILIZATION
 # ==========================================
-# layout="wide" se left/right ka khali space use hoga
 st.set_page_config(page_title="Study Booster", page_icon="🎓", layout="wide", initial_sidebar_state="collapsed")
 
 # 🖼️ Background Image Function
@@ -35,15 +34,14 @@ def add_bg_from_local(image_file):
 
 add_bg_from_local('bg.jpg') 
 
-# 🛠️ ULTRA-PRO CLEAN CSS (FIXED BOXING ISSUE)
+# 🛠️ ULTRA-PRO CLEAN CSS
 st.markdown("""
     <style>
-    /* Main container ko full width dena aur background fix karna */
     .block-container { 
-        max-width: 96% !important; /* Screen ka 96% hissa use karega */
+        max-width: 96% !important; 
         padding-top: 1.5rem !important; 
         padding-bottom: 1.5rem !important; 
-        background-color: rgba(255, 255, 255, 0.95); /* Sirf ek main safed background */
+        background-color: rgba(255, 255, 255, 0.95); 
         border-radius: 12px;
         margin-top: 15px;
         box-shadow: 0 4px 10px rgba(0,0,0,0.15);
@@ -51,24 +49,21 @@ st.markdown("""
     
     header[data-testid="stHeader"] { background-color: transparent !important; }
 
-    /* Palette Grid Buttons - Chhote aur gol (Compact & Clear) */
     div.stButton > button { 
         border-radius: 8px !important; 
         font-weight: bold !important; 
-        padding: 0.2rem 0.1rem !important; /* Padding kam kardi taaki number saaf dikhe */
+        padding: 0.2rem 0.1rem !important; 
         width: 100%;
         font-size: 14px !important;
     }
     
-    /* Primary buttons (Next/Submit) ko alag color dena */
     div.stButton > button[kind="primary"] { 
         background-color: #4F46E5 !important; 
         color: white !important; 
-        padding: 0.5rem 1rem !important; /* Inko bada rakha hai */
+        padding: 0.5rem 1rem !important; 
         font-size: 16px !important;
     }
 
-    /* 📌 STICKY RIGHT COLUMN (Timer aur Palette ke liye) */
     div[data-testid="column"]:nth-of-type(2) {
         position: -webkit-sticky !important;
         position: sticky !important;
@@ -98,7 +93,7 @@ if 'auth' not in st.session_state:
 # 3. LOGIN SCREEN
 # ==========================================
 if not st.session_state.auth:
-    col1, col2, col3 = st.columns([1, 1.5, 1]) # Center div bada kiya
+    col1, col2, col3 = st.columns([1, 1.5, 1]) 
     with col2:
         st.write("") 
         with st.container(border=True):
@@ -216,7 +211,7 @@ elif menu == "📝 Live Exam":
             else: st.error(f"Your: {user_ans} (❌) | Correct: {correct_ans}")
         st.stop()
             
-    # --- PHASE 3: ACTIVE EXAM (FULL WIDTH & CLEAN LAYOUT) ---
+    # --- PHASE 3: ACTIVE EXAM SCREEN ---
     else:
         if st.session_state.timer_mode == "Total Time (Minutes)":
             remaining_time = st.session_state.end_time - time.time()
@@ -229,24 +224,42 @@ elif menu == "📝 Live Exam":
         total_q = len(st.session_state.questions)
         q_data = st.session_state.questions[q_idx]
 
-        # 👈 Left Space (75%) for Question | 👉 Right Space (25%) for Palette
         col_main, col_pal = st.columns([3.5, 1.5]) 
         
         # 📌 RIGHT PANEL (Timer & Palette)
         with col_pal:
             if st.session_state.timer_mode == "Total Time (Minutes)":
                 rem_sec = int(st.session_state.end_time - time.time())
-                timer_html = f"""
+                
+                # SAFE HTML INJECTION (No f-string brackets issue)
+                timer_html = """
                 <!DOCTYPE html>
                 <html><head><style>
-                body {{ margin:0; padding:0; font-family:sans-serif; display:flex; justify-content:center; align-items:center; background:transparent; }}
-                .timer-box {{ background-color:#fee2e2; border:2px solid #ef4444; color:#dc2626; padding:6px 0; border-radius:8px; font-size:22px; font-weight:bold; text-align:center; width:100%; box-shadow:0 2px 4px rgba(0,0,0,0.1); }}
+                body { margin:0; padding:0; font-family:sans-serif; display:flex; justify-content:center; align-items:center; background:transparent; }
+                .timer-box { background-color:#fee2e2; border:2px solid #ef4444; color:#dc2626; padding:6px 0; border-radius:8px; font-size:22px; font-weight:bold; text-align:center; width:100%; box-shadow:0 2px 4px rgba(0,0,0,0.1); }
                 </style></head><body>
                     <div class="timer-box">⏳ <span id="time">00:00</span></div>
                     <script>
-                        var countDownDate = new Date().getTime() + ({rem_sec} * 1000);
-                        var x = setInterval(function() {{
+                        var countDownDate = new Date().getTime() + (REPLACE_SEC * 1000);
+                        var x = setInterval(function() {
                             var now = new Date().getTime();
                             var distance = countDownDate - now;
-                            if (distance <= 0) {{
+                            if (distance <= 0) {
                                 clearInterval(x); document.getElementById("time").innerHTML = "TIME UP!";
+                                var buttons = window.parent.document.querySelectorAll('button');
+                                for(var i=0; i<buttons.length; i++) { if(buttons[i].innerText.includes('Final Submit')) { buttons[i].click(); break; } }
+                            } else {
+                                var m = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
+                                var s = Math.floor((distance % (1000 * 60)) / 1000);
+                                m = m < 10 ? "0" + m : m; s = s < 10 ? "0" + s : s;
+                                document.getElementById("time").innerHTML = m + ":" + s;
+                            }
+                        }, 1000);
+                    </script>
+                </body></html>
+                """.replace("REPLACE_SEC", str(rem_sec))
+                
+                components.html(timer_html, height=60) 
+            
+            st.markdown("<h5 style='text-align:center; margin-top:0;'>Question Palette</h5>", unsafe_allow_html=True)
+            st.markdown("<p style='text-align:center; font-size:12px; margin-bottom:5px;'>🔵 Curr | 🟢 Ans | 🔴 Skip | ⚪ Unvisit</p>", unsafe_allow_html=True)
