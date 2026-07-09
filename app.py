@@ -289,7 +289,7 @@ def inject_custom_css():
         .palette-button-container {{ margin-bottom: 8px; }}
 
         /* 1:1 Aspect Ratio Square Question Palette Buttons Fix */
-        .palette-button-container div.stButton > button {
+        .palette-button-container div.stButton > button {{
             aspect-ratio: 1 / 1 !important;
             width: 100% !important;
             height: auto !important;
@@ -299,15 +299,15 @@ def inject_custom_css():
             align-items: center !important;
             justify-content: center !important;
             border-radius: 8px !important;
-        }
+        }}
         
-        .palette-button-container div.stButton > button p {
+        .palette-button-container div.stButton > button p {{
             margin: 0 !important;
             white-space: pre-wrap !important;
             text-align: center !important;
             line-height: 1.2 !important;
             font-size: 14px !important;
-        }
+        }}
         
         /* Mobile Responsiveness */
         @media (max-width: 768px) {{
