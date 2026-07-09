@@ -425,76 +425,6 @@ def inject_custom_css():
         div.stButton > button[kind="secondary"] * {{
             color: #be123c !important;
         }}
-
-        /* =========================================
-           Testbook-Style Question Palette CSS
-           ========================================= */
-        .cbt-btn-wrapper {{ margin-bottom: 8px; }}
-
-        /* Shared Palette Button Properties */
-        .cbt-btn-wrapper div.stButton > button {{
-            aspect-ratio: 1 / 1 !important;
-            width: 100% !important;
-            height: auto !important;
-            padding: 0 !important;
-            display: flex !important;
-            align-items: center !important;
-            justify-content: center !important;
-            border-radius: 6px !important;
-            border: 1px solid #cbd5e1 !important;
-            transition: all 0.2s ease-in-out;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05) !important;
-        }}
-        
-        .cbt-btn-wrapper div.stButton > button p {{
-            margin: 0 !important;
-            font-size: 15px !important;
-            font-weight: 700 !important;
-            line-height: 1 !important;
-        }}
-
-        /* Not Visited (White Background, Dark Text) */
-        .cbt-not-visited div.stButton > button {{
-            background-color: #ffffff !important;
-            color: #334155 !important;
-        }}
-        .cbt-not-visited div.stButton > button p {{ color: #334155 !important; }}
-
-        /* Answered (Green Background, White Text) */
-        .cbt-answered div.stButton > button {{
-            background-color: #22c55e !important;
-            border-color: #16a34a !important;
-            color: #ffffff !important;
-        }}
-        .cbt-answered div.stButton > button p {{ color: #ffffff !important; }}
-
-        /* Not Answered / Visited (Red Background, White Text) */
-        .cbt-not-answered div.stButton > button {{
-            background-color: #ef4444 !important;
-            border-color: #dc2626 !important;
-            color: #ffffff !important;
-        }}
-        .cbt-not-answered div.stButton > button p {{ color: #ffffff !important; }}
-
-        /* Current Question Highlight (Thick Blue Border) */
-        .cbt-current div.stButton > button {{
-            border: 3px solid #2563eb !important;
-            transform: scale(1.08) !important;
-            box-shadow: 0 0 10px rgba(37, 99, 235, 0.3) !important;
-        }}
-        
-        /* Mobile Responsiveness */
-        @media (max-width: 768px) {{
-            .block-container {{ padding: 1rem 0.5rem !important; }}
-            h3 {{ font-size: 1.3rem !important; line-height: 1.4 !important; }}
-            div.stButton > button {{ font-size: 14px !important; padding: 0.4rem !important; }}
-            
-            /* Prevent buttons from becoming giant squares on mobile */
-            .cbt-btn-wrapper div.stButton > button {{
-                max-width: 50px !important;
-                margin: 0 auto !important;
-            }}
-        }}
         </style>
     """, unsafe_allow_html=True)
 
@@ -877,8 +807,7 @@ def render_exam():
     total_q = len(st.session_state.questions)
     q_data = st.session_state.questions[q_idx]
 
-    # Inject Exam-specific CSS to strictly target the right panel (col_pal)
-    # This ensures no global components (like Dashboard) are affected by the redesign.
+    # Inject static architectural CSS for the right panel Layout and base Question Palette sizing.
     st.markdown("""
     <style>
     /* Question Panel (Right Column) Complete Redesign */
@@ -887,103 +816,47 @@ def render_exam():
         border: 1px solid #bfdbfe !important;
         border-radius: 8px !important;
         padding-bottom: 15px !important;
-        overflow: hidden; /* Ensures child element negative margins don't break border radius */
+        overflow: hidden; 
     }
     
-    /* Perfect Square Grid Buttons */
-    .cbt-btn-wrapper div.stButton > button {
+    /* Perfect Square Grid Buttons base layout structural properties */
+    div[data-testid="column"]:nth-of-type(2) div[data-testid="stHorizontalBlock"]:nth-of-type(1) button {
         aspect-ratio: 1 / 1 !important;
         width: 100% !important;
         border-radius: 4px !important;
         border: 1px solid #cbd5e1 !important;
         padding: 0 !important;
-        font-size: 13px !important; /* Reduced slightly to fit double digits */
+        font-size: 13px !important; 
         font-weight: 600 !important;
         background-color: #ffffff !important;
         color: #334155 !important;
-        min-width: 0 !important; /* Forces uniform shape */
-        min-height: 0 !important; /* Forces uniform shape */
+        min-width: 0 !important; 
+        min-height: 0 !important; 
         line-height: 1 !important;
         display: flex !important;
         align-items: center !important;
         justify-content: center !important;
+        position: relative !important;
+        transition: all 0.2s ease !important;
     }
 
-    /* FORCES NUMBERS TO STAY IN A SINGLE LINE */
-    .cbt-btn-wrapper div.stButton > button p {
+    /* Force numbers to stay on a single line */
+    div[data-testid="column"]:nth-of-type(2) div[data-testid="stHorizontalBlock"]:nth-of-type(1) button p {
         margin: 0 !important;
         padding: 0 !important;
         font-size: 13px !important;
         white-space: nowrap !important; 
     }
-
-    /* 1 - Not Visited */
-    .cbt-btn-wrapper.cbt-not-visited div.stButton > button {
-        background-color: #ffffff !important;
-        border-color: #cbd5e1 !important;
-        color: #475569 !important;
-    }
-
-    /* 2 - Visited but Not Answered */
-    .cbt-btn-wrapper.cbt-not-answered div.stButton > button {
-        background-color: #e55a45 !important; /* Testbook Red/Orange */
-        border-color: #e55a45 !important;
-        color: white !important;
-    }
-
-    /* 3 - Answered */
-    .cbt-btn-wrapper.cbt-answered div.stButton > button {
-        background-color: #2bc765 !important; /* Testbook Green */
-        border-color: #2bc765 !important;
-        color: white !important;
-    }
-    
-    /* 4 - Marked for Review */
-    .cbt-btn-wrapper.cbt-marked div.stButton > button {
-        background-color: #9d48b1 !important; /* Purple */
-        border-color: #9d48b1 !important;
-        color: white !important;
-        border-radius: 50% !important; /* Circle form mimicking CBT UI */
-    }
-
-    /* 5 - Answered & Marked for Review */
-    .cbt-btn-wrapper.cbt-ans-marked div.stButton > button {
-        background-color: #9d48b1 !important; /* Purple */
-        border-color: #9d48b1 !important;
-        color: white !important;
-        border-radius: 50% !important; /* Circle form */
-        position: relative !important;
-    }
-
-    /* The green dot indicator for Answered & Marked */
-    .cbt-btn-wrapper.cbt-ans-marked div.stButton > button::after {
-        content: '';
-        position: absolute;
-        bottom: -2px;
-        right: -2px;
-        width: 10px;
-        height: 10px;
-        background-color: #2bc765;
-        border-radius: 50%;
-        border: 2px solid white;
-    }
-
-    /* 6 - Current Question Highlight (Placed at bottom to override borders properly) */
-    .cbt-btn-wrapper.cbt-current div.stButton > button {
-        border: 2px solid #2563eb !important;
-        box-shadow: 0 0 0 3px rgba(37,99,235,0.2) !important;
-        transform: scale(1.08) !important;
-        z-index: 2;
-    }
     
     /* Bottom buttons specifically mapped in the Right Panel */
-    div[data-testid="column"]:nth-of-type(2) div[data-testid="stHorizontalBlock"] div.stButton > button {
+    div[data-testid="column"]:nth-of-type(2) > div[data-testid="stVerticalBlock"] > div[data-testid="stHorizontalBlock"]:nth-of-type(2) div.stButton > button {
         background-color: #dbeafe !important;
         color: #1e40af !important;
         border: none !important;
         font-size: 13px !important;
         border-radius: 4px !important;
     }
+    
     div[data-testid="column"]:nth-of-type(2) > div[data-testid="stVerticalBlock"] > div:last-child div.stButton > button {
         background-color: #0ea5e9 !important; /* Cyan Submit Button */
         color: white !important;
@@ -991,6 +864,13 @@ def render_exam():
         font-size: 14px !important;
         border-radius: 4px !important;
         margin-top: 5px !important;
+    }
+    
+    @media (max-width: 768px) {
+        div[data-testid="column"]:nth-of-type(2) div[data-testid="stHorizontalBlock"]:nth-of-type(1) button {
+            max-width: 50px !important;
+            margin: 0 auto !important;
+        }
     }
     </style>
     """, unsafe_allow_html=True)
@@ -1080,6 +960,8 @@ def render_exam():
             except TypeError:
                 palette_scroll = st.container()
 
+        dynamic_css_blocks = []
+
         # Flex Grid Palette inside the independent scroll container
         with palette_scroll:
             grid_cols = st.columns(5)
@@ -1089,27 +971,39 @@ def render_exam():
                 is_mark = i in st.session_state.marked_questions
                 is_curr = (i == q_idx)
                 
-                # Determine class based on the fully upgraded status logic
-                wrapper_class = "cbt-btn-wrapper"
+                # Dynamic targeting logic: accurately map button structural index based on Streamlit rendering
+                c = (i % 5) + 1
+                r = (i // 5) + 1
                 
+                # Highly specific selector guarantees we only target the actual palette buttons, bypassing wrappers
+                selector = f'div[data-testid="column"]:nth-of-type(2) div[data-testid="stHorizontalBlock"]:nth-of-type(1) div[data-testid="column"]:nth-of-type({c}) div.element-container:nth-of-type({r}) button'
+                
+                css_rule = ""
+                
+                # 1. Base Status Render
                 if is_ans and is_mark:
-                    wrapper_class += " cbt-ans-marked"
+                    css_rule += f"{selector} {{ background-color: #9d48b1 !important; border-color: #9d48b1 !important; color: white !important; border-radius: 50% !important; }} {selector} p {{ color: white !important; }} {selector}::after {{ content: ''; position: absolute; bottom: -2px; right: -2px; width: 10px; height: 10px; background-color: #2bc765; border-radius: 50%; border: 2px solid white; z-index: 3; }}"
                 elif is_ans:
-                    wrapper_class += " cbt-answered"
+                    css_rule += f"{selector} {{ background-color: #2bc765 !important; border-color: #2bc765 !important; color: white !important; }} {selector} p {{ color: white !important; }}"
                 elif is_mark:
-                    wrapper_class += " cbt-marked"
+                    css_rule += f"{selector} {{ background-color: #9d48b1 !important; border-color: #9d48b1 !important; color: white !important; border-radius: 50% !important; }} {selector} p {{ color: white !important; }}"
                 elif is_vis:
-                    wrapper_class += " cbt-not-answered"
+                    css_rule += f"{selector} {{ background-color: #e55a45 !important; border-color: #e55a45 !important; color: white !important; }} {selector} p {{ color: white !important; }}"
                 else:
-                    wrapper_class += " cbt-not-visited"
-                    
+                    css_rule += f"{selector} {{ background-color: #ffffff !important; border-color: #cbd5e1 !important; color: #475569 !important; }} {selector} p {{ color: #475569 !important; }}"
+                
+                # 2. Current Highlight Overlay
                 if is_curr:
-                    wrapper_class += " cbt-current"
+                    css_rule += f"{selector} {{ border: 2px solid #2563eb !important; box-shadow: 0 0 0 3px rgba(37,99,235,0.25) !important; transform: scale(1.08) !important; z-index: 2; }}"
                     
+                dynamic_css_blocks.append(css_rule)
+                
                 with grid_cols[i % 5]:
-                    st.markdown(f"<div class='{wrapper_class}'>", unsafe_allow_html=True)
+                    # Unwrapped st.button call allows nth-of-type selector styling injection cleanly
                     st.button(f"{i+1}", key=f"pal_{i}", on_click=nav_goto, args=(i,))
-                    st.markdown("</div>", unsafe_allow_html=True)
+
+        # Push calculated individual live question styles instantly 
+        st.markdown(f"<style>{''.join(dynamic_css_blocks)}</style>", unsafe_allow_html=True)
                     
         # Fixed Bottom Action Area
         st.markdown("<div style='margin-top: 15px;'></div>", unsafe_allow_html=True)
