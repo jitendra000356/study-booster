@@ -7,7 +7,7 @@ import base64
 from datetime import datetime
 
 # ==========================================
-# 1. PAGE CONFIGURATION
+# 1. PAGE CONFIGURATION & BACKGROUND LOGIC
 # ==========================================
 st.set_page_config(page_title="Study Booster", page_icon="🎓", layout="wide", initial_sidebar_state="collapsed")
 
@@ -34,71 +34,60 @@ def add_bg_from_local(image_file):
 
 add_bg_from_local('bg.jpg') 
 
-# ==========================================
-# 2. 🔥 THE ULTIMATE CSS FIX (SCROLL & STICKY)
-# ==========================================
+# 🛠️ SUPER CLEAN & SAFE CSS
 st.markdown("""
     <style>
-    /* Main Background Box (Safed Sheesha) */
+    /* 1. Main Background Box */
     .block-container { 
-        max-width: 98% !important; 
-        padding-top: 1rem !important; 
-        padding-bottom: 1rem !important; 
-        background-color: rgba(255, 255, 255, 0.95) !important; 
+        max-width: 96% !important; 
+        padding-top: 1.5rem !important; 
+        padding-bottom: 1.5rem !important; 
+        background-color: rgba(255, 255, 255, 0.94) !important; 
         border-radius: 12px;
         margin-top: 10px;
         box-shadow: 0 4px 10px rgba(0,0,0,0.15);
     }
     header[data-testid="stHeader"] { background-color: transparent !important; }
 
-    /* Button Styling (Chote aur Gol) */
+    /* 2. Button Styling */
     div.stButton > button { 
         border-radius: 8px !important; 
         font-weight: bold !important; 
-        padding: 0.2rem 0.1rem !important; 
+        padding: 0.3rem 0.1rem !important; 
         width: 100%;
-        font-size: 14px !important;
     }
     div.stButton > button[kind="primary"] { 
         background-color: #4F46E5 !important; 
         color: white !important; 
         padding: 0.5rem 1rem !important; 
-        font-size: 16px !important;
     }
 
-    /* =======================================================
-       🎯 MAIN MAGIC: STICKY & INDEPENDENT SCROLLBAR
-       ======================================================= */
-    
-    /* 1. Parents ko 'overflow: visible' karna zaruri hai sticky ke liye */
-    .stApp, .block-container, div[data-testid="stVerticalBlock"] {
-        overflow: visible !important;
-    }
-
-    /* 2. Daayein (Right) column ko pakad kar fix karna */
-    div[data-testid="stHorizontalBlock"] > div:nth-child(2) {
+    /* 3. 📌 RIGHT COLUMN STICKY & SCROLLABLE */
+    div[data-testid="column"]:nth-of-type(2) {
         position: -webkit-sticky !important;
         position: sticky !important;
-        top: 20px !important;             /* Upar se 20px par chipak jayega */
-        max-height: 85vh !important;      /* Box ki height screen ka 85% fix kar di */
-        overflow-y: auto !important;      /* Sirf iske andar scrollbar aayega */
+        top: 20px !important;
+        height: 85vh !important; 
+        overflow-y: auto !important; 
+        padding-right: 10px;
+        border-left: 2px solid #E2E8F0;
         padding-left: 15px;
-        padding-right: 5px;
-        border-left: 2px solid #E2E8F0;   /* Ek divider line */
     }
     
-    /* Right Column ka Scrollbar Design */
-    div[data-testid="stHorizontalBlock"] > div:nth-child(2)::-webkit-scrollbar { width: 6px; }
-    div[data-testid="stHorizontalBlock"] > div:nth-child(2)::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 5px; }
+    /* Scrollbar Design */
+    div[data-testid="column"]:nth-of-type(2)::-webkit-scrollbar { width: 5px; }
+    div[data-testid="column"]:nth-of-type(2)::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 5px; }
     </style>
 """, unsafe_allow_html=True)
 
 CSV_FOLDER = 'saved_csvs'
-if not os.path.exists(CSV_FOLDER): os.makedirs(CSV_FOLDER)
+if not os.path.exists(CSV_FOLDER):
+    os.makedirs(CSV_FOLDER)
+
 ALLOWED_USERS = {"Jiten (Admin)": "admin123", "Rahul (Student)": "rahul2026"}
 
 # ==========================================
-# 3. SESSION STATE
+# 2. SESSION STATE
 # ==========================================
 if 'auth' not in st.session_state:
     st.session_state.update({
@@ -109,7 +98,7 @@ if 'auth' not in st.session_state:
     })
 
 # ==========================================
-# 4. LOGIN SCREEN
+# 3. LOGIN SCREEN
 # ==========================================
 if not st.session_state.auth:
     col1, col2, col3 = st.columns([1, 1.5, 1]) 
@@ -131,7 +120,7 @@ if not st.session_state.auth:
     st.stop()
 
 # ==========================================
-# 5. FUNCTIONS
+# 4. FUNCTIONS
 # ==========================================
 def load_quiz(file_name, timer_mode, time_minutes):
     st.session_state.questions = []
@@ -155,7 +144,7 @@ def load_quiz(file_name, timer_mode, time_minutes):
     st.session_state.time_val = time_minutes
 
 # ==========================================
-# 6. DASHBOARD & SIDEBAR
+# 5. DASHBOARD & SIDEBAR
 # ==========================================
 st.sidebar.markdown(f"### 👤 {st.session_state.current_user}")
 st.sidebar.divider()
@@ -194,7 +183,7 @@ if menu == "📚 Dashboard":
                 st.success("Quiz Loaded! Go to 'Live Exam' from sidebar to start.")
 
 # ==========================================
-# 7. LIVE EXAM MODULE
+# 6. LIVE EXAM MODULE
 # ==========================================
 elif menu == "📝 Live Exam":
     if not st.session_state.quiz_ready:
@@ -225,13 +214,85 @@ elif menu == "📝 Live Exam":
             st.markdown(f"**Q{i+1}: {q['q']}**")
             correct_ans = q['options'][q['ans']]
             user_ans = st.session_state.user_answers.get(i)
-            if user_ans == correct_ans: st.success(f"Your: {user_ans} (✅)")
-            elif user_ans is None: st.warning(f"Not Attempted. Correct: {correct_ans}")
-            else: st.error(f"Your: {user_ans} (❌) | Correct: {correct_ans}")
+            if user_ans == correct_ans:
+                st.success(f"Your: {user_ans} (✅)")
+            elif user_ans is None:
+                st.warning(f"Not Attempted. Correct: {correct_ans}")
+            else:
+                st.error(f"Your: {user_ans} (❌) | Correct: {correct_ans}")
         st.stop()
             
     # --- PHASE 3: ACTIVE EXAM (FIXED SPLIT) ---
     else:
+        # TIMING CHECK
         if st.session_state.timer_mode == "Total Time (Minutes)":
             remaining_time = st.session_state.end_time - time.time()
             if remaining_time <= 0:
+                st.session_state.quiz_completed = True
+                st.rerun()
+
+        q_idx = st.session_state.current_q
+        st.session_state.visited_questions.add(q_idx)
+        total_q = len(st.session_state.questions)
+        q_data = st.session_state.questions[q_idx]
+
+        # 👈 LEFT (75%) | 👉 RIGHT (25%)
+        col_main, col_pal = st.columns([3.5, 1.2]) 
+        
+        # 📌 RIGHT PANEL (Timer + Grid)
+        with col_pal:
+            if st.session_state.timer_mode == "Total Time (Minutes)":
+                rem_sec = int(st.session_state.end_time - time.time())
+                timer_html = """
+                <!DOCTYPE html>
+                <html><head><style>
+                body { margin:0; padding:0; font-family:sans-serif; background:transparent; }
+                .timer-box { background-color:#fee2e2; border:2px solid #ef4444; color:#dc2626; padding:8px 0; border-radius:8px; font-size:22px; font-weight:bold; text-align:center; box-shadow:0 2px 4px rgba(0,0,0,0.1); }
+                </style></head><body>
+                    <div class="timer-box">⏳ <span id="time">00:00</span></div>
+                    <script>
+                        var countDownDate = new Date().getTime() + (REPLACE_SEC * 1000);
+                        var x = setInterval(function() {
+                            var now = new Date().getTime();
+                            var distance = countDownDate - now;
+                            if (distance <= 0) {
+                                clearInterval(x); document.getElementById("time").innerHTML = "TIME UP!";
+                                var buttons = window.parent.document.querySelectorAll('button');
+                                for(var i=0; i<buttons.length; i++) { if(buttons[i].innerText.includes('Final Submit')) { buttons[i].click(); break; } }
+                            } else {
+                                var m = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
+                                var s = Math.floor((distance % (1000 * 60)) / 1000);
+                                m = m < 10 ? "0" + m : m; s = s < 10 ? "0" + s : s;
+                                document.getElementById("time").innerHTML = m + ":" + s;
+                            }
+                        }, 1000);
+                    </script>
+                </body></html>
+                """.replace("REPLACE_SEC", str(rem_sec))
+                components.html(timer_html, height=65) 
+            
+            st.markdown("<h5 style='text-align:center; margin-top:5px;'>Question Palette</h5>", unsafe_allow_html=True)
+            st.markdown("<p style='text-align:center; font-size:12px; margin-bottom:10px;'>🔵 Curr &nbsp; 🟢 Ans &nbsp; 🔴 Skip &nbsp; ⚪ Unvisit</p>", unsafe_allow_html=True)
+            
+            grid_cols = st.columns(5)
+            for i in range(total_q):
+                if i == q_idx:
+                    icon = "🔵"
+                elif st.session_state.user_answers.get(i) is not None:
+                    icon = "🟢"
+                elif i in st.session_state.visited_questions:
+                    icon = "🔴"
+                else:
+                    icon = "⚪"
+                    
+                with grid_cols[i % 5]:
+                    if st.button(f"{icon} {i+1}", key=f"pal_{i}"):
+                        st.session_state.current_q = i
+                        st.rerun()
+
+        # 👈 LEFT PANEL (Question Area)
+        with col_main:
+            st.markdown(f"<h3 style='color:#4F46E5; margin-top:0;'>{st.session_state.topic}</h3>", unsafe_allow_html=True)
+            st.write("---")
+            
+            st.markdown(f"<h4 style='line-height: 1.5;'>Q{q_idx + 1}. {q_data['q']}</h4>", unsafe_allow_
