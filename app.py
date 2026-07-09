@@ -240,24 +240,74 @@ def record_activity():
 # 4. EXAM CONTROL & LOGIC FUNCTIONS
 # ==========================================
 def load_quiz(file_name):
-    """Parses CSV correctly, filtering empty options, applies stored timer settings, and resets exam state."""
+    """Parses CSV correctly supporting both MCQ and Match the Following questions dynamically (2 to 10 items)."""
     st.session_state.questions = []
     file_path = os.path.join(CSV_FOLDER, file_name.replace('/', os.sep))
     
     with open(file_path, 'r', encoding='utf-8-sig', errors='ignore') as f:
         reader = csv.DictReader(f)
         for row in reader:
-            opts = []
-            for i in range(1, 6):
-                col_name = f'Option{i}'
-                if col_name in row and row[col_name].strip():
-                    opts.append(row[col_name].strip())
-            
-            st.session_state.questions.append({
-                'q': row['Question'].strip(), 
-                'options': opts, 
-                'ans': int(row['Answer']) - 1
-            })
+            # Check if it is a Match the Following question
+            is_match = False
+            if 'Type' in row and str(row['Type']).strip().lower() in ['match', 'matching', 'match the following']:
+                is_match = True
+            elif 'Left1' in row and str(row.get('Left1', '')).strip():
+                is_match = True
+                
+            if is_match:
+                left_items = []
+                right_items = []
+                # Supports 2 to 10 items dynamically
+                for i in range(1, 11):
+                    l_col = f'Left{i}'
+                    r_col = f'Right{i}'
+                    if l_col in row and r_col in row and str(row[l_col]).strip() and str(row[r_col]).strip():
+                        left_items.append(str(row[l_col]).strip())
+                        right_items.append(str(row[r_col]).strip())
+                
+                # Fallback in case Option1..Option10 are used as "Left = Right" or "Left :: Right" with Type=Match
+                if not left_items:
+                    for i in range(1, 11):
+                        col_name = f'Option{i}'
+                        if col_name in row and str(row[col_name]).strip():
+                            val = str(row[col_name]).strip()
+                            for sep in ['::', '=', ':', '-']:
+                                if sep in val:
+                                    parts = val.split(sep, 1)
+                                    if len(parts) == 2 and parts[0].strip() and parts[1].strip():
+                                        left_items.append(parts[0].strip())
+                                        right_items.append(parts[1].strip())
+                                        break
+                                        
+                # Correct answer mapping for match is dict of {left_item: right_item}
+                correct_map = {l: r for l, r in zip(left_items, right_items)}
+                
+                st.session_state.questions.append({
+                    'type': 'match',
+                    'q': str(row['Question']).strip(),
+                    'left_items': left_items,
+                    'right_items': right_items,
+                    'ans': correct_map
+                })
+            else:
+                # Existing MCQ Parser
+                opts = []
+                for i in range(1, 6):
+                    col_name = f'Option{i}'
+                    if col_name in row and row[col_name].strip():
+                        opts.append(row[col_name].strip())
+                
+                try:
+                    ans_idx = int(row['Answer']) - 1
+                except (ValueError, KeyError):
+                    ans_idx = 0
+                    
+                st.session_state.questions.append({
+                    'type': 'mcq',
+                    'q': str(row['Question']).strip(), 
+                    'options': opts, 
+                    'ans': ans_idx
+                })
             
     timers_data = load_timers_data()
     t_config = timers_data.get(file_name, {"mode": "Total Time", "value": 30})
@@ -291,11 +341,18 @@ def load_quiz(file_name):
     st.session_state.attempt_recorded = False
 
 def calculate_score():
+    """Calculates final score dynamically. Strict validation for Match the Following (no partial marking)."""
     score = 0
     for i, q in enumerate(st.session_state.questions):
-        correct_ans = q['options'][q['ans']] if 0 <= q['ans'] < len(q['options']) else None
-        if st.session_state.user_answers.get(i) == correct_ans:
-            score += 1
+        if q.get('type') == 'match':
+            user_map = st.session_state.user_answers.get(i)
+            # Evaluated only when complete matching set is exactly equal to correct map
+            if isinstance(user_map, dict) and user_map == q['ans']:
+                score += 1
+        else:
+            correct_ans = q['options'][q['ans']] if 0 <= q['ans'] < len(q['options']) else None
+            if st.session_state.user_answers.get(i) == correct_ans:
+                score += 1
     return score
 
 def nav_goto(q_idx):
@@ -328,6 +385,12 @@ def clear_answer(q_idx):
     if not st.session_state.is_paused:
         st.session_state.user_answers.pop(q_idx, None)
         st.session_state[f"radio_ans_{q_idx}"] = None
+        # Clear Match the Following selectboxes if applicable
+        if 0 <= q_idx < len(st.session_state.questions):
+            q_data = st.session_state.questions[q_idx]
+            if q_data.get('type') == 'match':
+                for idx in range(len(q_data.get('left_items', []))):
+                    st.session_state[f"match_sel_{q_idx}_{idx}"] = "-- Select --"
 
 def toggle_mark(q_idx):
     record_activity()
@@ -345,6 +408,24 @@ def on_radio_change(q_idx):
             st.session_state.user_answers[q_idx] = selected
         else:
             st.session_state.user_answers.pop(q_idx, None)
+
+def on_match_change(q_idx):
+    """Callback for Match the Following dropdown selections."""
+    record_activity()
+    if not st.session_state.is_paused:
+        if 0 <= q_idx < len(st.session_state.questions):
+            q_data = st.session_state.questions[q_idx]
+            if q_data.get('type') == 'match':
+                left_items = q_data['left_items']
+                current_map = {}
+                for idx, l_item in enumerate(left_items):
+                    selected = st.session_state.get(f"match_sel_{q_idx}_{idx}")
+                    if selected and selected != "-- Select --":
+                        current_map[l_item] = selected
+                if current_map:
+                    st.session_state.user_answers[q_idx] = current_map
+                else:
+                    st.session_state.user_answers.pop(q_idx, None)
 
 # ==========================================
 # 5. CSS & JAVASCRIPT INJECTION
@@ -849,7 +930,8 @@ def render_exam():
     not_visit_count = 0
     
     for i in range(total_q):
-        is_ans = st.session_state.user_answers.get(i) is not None
+        ans_val = st.session_state.user_answers.get(i)
+        is_ans = ans_val is not None and ans_val != {}
         is_vis = i in st.session_state.visited_questions
         is_mark = i in st.session_state.marked_questions
         
@@ -868,9 +950,8 @@ def render_exam():
     with col_pal:
         render_visual_timer()
         
-        # --- UI REFINEMENT 2: PAUSE BUTTON RELOCATED HERE ---
+        # Pause button located inside/below the clock area
         st.button("⏸ Pause", type="secondary", on_click=pause_exam, use_container_width=True, key="btn_pause_top")
-        # ----------------------------------------------------
         
         username_display = st.session_state.current_user.split()[0]
         avatar_letter = username_display[0].upper() if username_display else "U"
@@ -929,7 +1010,8 @@ def render_exam():
         # ---------------------------------------------------------
         grid_html = ""
         for i in range(total_q):
-            is_ans = st.session_state.user_answers.get(i) is not None
+            ans_val = st.session_state.user_answers.get(i)
+            is_ans = ans_val is not None and ans_val != {}
             is_vis = i in st.session_state.visited_questions
             is_mark = i in st.session_state.marked_questions
             is_curr = (i == q_idx)
@@ -1056,9 +1138,8 @@ def render_exam():
         with b2:
             st.button("Instructions", use_container_width=True, key="btn_inst")
             
-        # --- UI REFINEMENT 1: RENAMED SUBMIT BUTTON ---
+        # Single consolidated Final Submit button at bottom of Right Panel
         st.button("🚀 Final Submit", type="primary", use_container_width=True, key="btn_sub_right", on_click=nav_submit)
-        # ----------------------------------------------
 
     # ================== LEFT PANEL ==================
     with col_main:
@@ -1070,27 +1151,64 @@ def render_exam():
         
         st.markdown(f"<div style='font-size: 1.3rem; font-weight: 600; line-height: 1.6; color: #1e293b; margin-bottom: 15px;'>Q{q_idx + 1}. {clean_q}</div>", unsafe_allow_html=True)
         
-        saved_ans = st.session_state.user_answers.get(q_idx)
-        st.session_state[f"radio_ans_{q_idx}"] = saved_ans
-
-        try:
-            default_index = q_data['options'].index(saved_ans) if saved_ans in q_data['options'] else None
-        except ValueError:
-            default_index = None
+        # ---------------------------------------------------------
+        # NEW: MATCH THE FOLLOWING DYNAMIC UI vs EXISTING MCQ UI
+        # ---------------------------------------------------------
+        if q_data.get('type') == 'match':
+            left_items = q_data['left_items']
+            right_items = q_data['right_items']
             
-        st.radio(
-            "Options:", 
-            options=q_data['options'], 
-            index=default_index, 
-            key=f"radio_ans_{q_idx}", 
-            on_change=on_radio_change,
-            args=(q_idx,),
-            label_visibility="collapsed"
-        )
+            dropdown_options = ["-- Select --"] + right_items
+            saved_map = st.session_state.user_answers.get(q_idx, {})
+            if not isinstance(saved_map, dict):
+                saved_map = {}
+                
+            st.markdown("<div style='margin-bottom: 10px;'></div>", unsafe_allow_html=True)
+            
+            for idx, l_item in enumerate(left_items):
+                letter = chr(65 + idx) if idx < 26 else f"M{idx+1}"
+                
+                # Ensure session state key is synced before widget render
+                curr_val = saved_map.get(l_item, "-- Select --")
+                if curr_val not in dropdown_options:
+                    curr_val = "-- Select --"
+                st.session_state[f"match_sel_{q_idx}_{idx}"] = curr_val
+                
+                c_left, c_right = st.columns([2.5, 3.5])
+                with c_left:
+                    st.markdown(f"<div style='font-size: 1.05rem; font-weight: 600; color: #1e293b; padding-top: 8px;'>{letter}. {l_item}</div>", unsafe_allow_html=True)
+                with c_right:
+                    st.selectbox(
+                        f"Match for {l_item}",
+                        options=dropdown_options,
+                        key=f"match_sel_{q_idx}_{idx}",
+                        on_change=on_match_change,
+                        args=(q_idx,),
+                        label_visibility="collapsed"
+                    )
+        else:
+            # EXISTING MCQ RADIO WORKFLOW
+            saved_ans = st.session_state.user_answers.get(q_idx)
+            st.session_state[f"radio_ans_{q_idx}"] = saved_ans
+
+            try:
+                default_index = q_data['options'].index(saved_ans) if saved_ans in q_data['options'] else None
+            except ValueError:
+                default_index = None
+                
+            st.radio(
+                "Options:", 
+                options=q_data['options'], 
+                index=default_index, 
+                key=f"radio_ans_{q_idx}", 
+                on_change=on_radio_change,
+                args=(q_idx,),
+                label_visibility="collapsed"
+            )
+        # ---------------------------------------------------------
             
         st.write("<br><br>", unsafe_allow_html=True)
         
-        # --- UI REFINEMENT 1 & 2: REMOVED PAUSE AND FINAL SUBMIT FROM HERE ---
         b_col1, b_col2, b_col3, b_col4 = st.columns([1.5, 1.5, 2.5, 1.5])
         
         with b_col1:
@@ -1109,7 +1227,6 @@ def render_exam():
                 st.button("Next ⏩", type="primary", on_click=nav_next, use_container_width=True)
             else:
                 st.button("Finish", type="secondary", disabled=True, use_container_width=True)
-        # ---------------------------------------------------------------------
 
 def render_result():
     total_q = len(st.session_state.questions)
@@ -1135,17 +1252,50 @@ def render_result():
     for i, q in enumerate(st.session_state.questions):
         st.markdown(f"**Q{i+1}: {q['q']}**")
         
-        correct_ans = q['options'][q['ans']] if 0 <= q['ans'] < len(q['options']) else "N/A"
-        user_ans = st.session_state.user_answers.get(i)
-        
-        if user_ans == correct_ans: 
-            st.success(f"**Your Answer:** {user_ans} (✅ Correct)")
-        elif user_ans is None: 
-            st.warning(f"**Not Attempted.** Correct Answer: {correct_ans}")
-        else: 
-            st.error(f"**Your Answer:** {user_ans} (❌ Wrong)")
-            st.info(f"**Correct Answer:** {correct_ans}")
-        st.write("---")
+        # ---------------------------------------------------------
+        # NEW: RESULT EVALUATION FOR MATCH THE FOLLOWING
+        # ---------------------------------------------------------
+        if q.get('type') == 'match':
+            correct_map = q['ans']
+            user_map = st.session_state.user_answers.get(i)
+            
+            is_attempted = isinstance(user_map, dict) and len(user_map) > 0
+            is_correct = is_attempted and user_map == correct_map
+            
+            if is_correct:
+                st.success("**Your Matching:** (✅ Correct - 100% Exact Match)")
+            elif not is_attempted:
+                st.warning("**Not Attempted.**")
+            else:
+                st.error("**Your Matching:** (❌ Wrong - Partial or Incorrect Match)")
+                
+            left_items = q.get('left_items', [])
+            for idx, l_item in enumerate(left_items):
+                letter = chr(65 + idx) if idx < 26 else f"M{idx+1}"
+                u_val = user_map.get(l_item, "None") if is_attempted else "None"
+                c_val = correct_map.get(l_item, "N/A")
+                
+                if u_val == c_val:
+                    st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;🔹 **{letter}. {l_item}** ➔ **{u_val}** &nbsp; ✅")
+                elif not is_attempted:
+                    st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;🔹 **{letter}. {l_item}** ➔ *Correct:* **{c_val}**")
+                else:
+                    st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;🔹 **{letter}. {l_item}** ➔ *Your Answer:* <span style='color:#e55a45; font-weight:bold;'>{u_val}</span> &nbsp;|&nbsp; *Correct:* **{c_val}**", unsafe_allow_html=True)
+            st.write("---")
+        else:
+            # EXISTING MCQ RESULT EVALUATION
+            correct_ans = q['options'][q['ans']] if 0 <= q['ans'] < len(q['options']) else "N/A"
+            user_ans = st.session_state.user_answers.get(i)
+            
+            if user_ans == correct_ans: 
+                st.success(f"**Your Answer:** {user_ans} (✅ Correct)")
+            elif user_ans is None: 
+                st.warning(f"**Not Attempted.** Correct Answer: {correct_ans}")
+            else: 
+                st.error(f"**Your Answer:** {user_ans} (❌ Wrong)")
+                st.info(f"**Correct Answer:** {correct_ans}")
+            st.write("---")
+        # ---------------------------------------------------------
         
     st.write("<br>", unsafe_allow_html=True)
     if st.button("🏠 Back to Dashboard", type="primary"):
