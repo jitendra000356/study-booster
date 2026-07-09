@@ -5,68 +5,31 @@ import time
 from datetime import datetime
 
 # ==========================================
-# 1. PAGE CONFIGURATION & PREMIUM CSS
+# 1. PAGE CONFIGURATION & THEME
 # ==========================================
 st.set_page_config(page_title="Study Booster", page_icon="🎓", layout="wide", initial_sidebar_state="expanded")
 
-# Ultra-Professional EdTech UI CSS
+# Thoda sa professional touch (Buttons aur progress bar ke liye)
 st.markdown("""
     <style>
-    /* Clean Light Background for entire app */
-    .stApp { background-color: #F4F7FB; color: #1E293B; }
-    
-    /* Center align the login card */
-    .login-container {
-        background-color: white;
-        padding: 3rem;
-        border-radius: 12px;
-        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
-        text-align: center;
-    }
-    
-    /* Professional EdTech Buttons (Primary) */
+    /* Primary Button ko aur sundar banana */
     div.stButton > button[kind="primary"] {
-        background-color: #4F46E5 !important;
-        color: white !important;
-        border: none !important;
-        border-radius: 6px !important;
-        font-weight: 600 !important;
-        padding: 0.5rem 1rem !important;
-        width: 100%;
-        transition: all 0.3s ease;
+        font-weight: bold;
+        border-radius: 8px;
+        padding: 0.5rem 1rem;
     }
-    div.stButton > button[kind="primary"]:hover {
-        background-color: #4338CA !important;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    /* Logo ko center karne ka CSS */
+    .logo-container {
+        display: flex;
+        justify-content: center;
+        margin-bottom: 20px;
     }
-    
-    /* Secondary Buttons */
-    div.stButton > button[kind="secondary"] {
-        background-color: white !important;
-        color: #4F46E5 !important;
-        border: 1px solid #4F46E5 !important;
-        border-radius: 6px !important;
-        font-weight: 600 !important;
-    }
-    
-    /* Inputs & Radios styling */
-    .stTextInput > div > div > input {
-        border-radius: 6px;
-        border: 1px solid #CBD5E1;
-    }
-    
-    /* Headings */
-    h1, h2, h3 { color: #0F172A !important; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-    
-    /* Top Right Button Alignment hack */
-    .top-right-btn { display: flex; justify-content: flex-end; }
     </style>
 """, unsafe_allow_html=True)
 
 CSV_FOLDER = 'saved_csvs'
 if not os.path.exists(CSV_FOLDER): os.makedirs(CSV_FOLDER)
 
-# Configuration
 ALLOWED_USERS = {
     "Jiten (Admin)": "admin123",
     "Rahul (Student)": "rahul2026",
@@ -84,35 +47,43 @@ if 'auth' not in st.session_state:
     })
 
 # ==========================================
-# 3. PROFESSIONAL LOGIN SCREEN
+# 3. PROFESSIONAL LOGIN SCREEN (FIXED)
 # ==========================================
 if not st.session_state.auth:
-    # 3 Columns banakar center wale me login form dalenge
-    col1, col2, col3 = st.columns([1, 1.5, 1])
+    # Screen ko 3 hisso me batenge, center wala bada hoga
+    col1, col2, col3 = st.columns([1, 1.2, 1])
+    
     with col2:
-        st.markdown("<div class='login-container'>", unsafe_allow_html=True)
-        
-        # Logo aur Title
-        try:
-            st.image("logo.png", width=100) # Ensure logo.png is in your folder
-        except:
-            st.markdown("<h1 style='font-size: 3rem; text-align:center;'>🎓</h1>", unsafe_allow_html=True)
+        st.write("") # Top spacing
+        st.write("")
+        # Streamlit ka native beautiful Card/Container
+        with st.container(border=True):
             
-        st.markdown("<h2 style='text-align: center;'>Study Booster Portal</h2>", unsafe_allow_html=True)
-        st.write("---")
-        
-        username = st.selectbox("👤 Select Profile", ["-- Select User --"] + list(ALLOWED_USERS.keys()))
-        pwd = st.text_input("🔑 Enter Passcode", type="password")
-        
-        st.write("") # spacing
-        if st.button("Secure Login 🚀", type="primary"):
-            if username != "-- Select User --" and ALLOWED_USERS.get(username) == pwd:
-                st.session_state.auth = True
-                st.session_state.current_user = username
-                st.rerun()
-            else:
-                st.error("❌ Invalid Credentials! Please check your name and passcode.")
-        st.markdown("</div>", unsafe_allow_html=True)
+            # Logo ko ekdam perfect center aur bada dikhane ke liye
+            logo_col1, logo_col2, logo_col3 = st.columns([1, 3, 1])
+            with logo_col2:
+                try:
+                    # use_container_width=True logo ko column me automatically fit kar dega
+                    st.image("logo.png", use_container_width=True) 
+                except:
+                    st.markdown("<h1 style='text-align: center; font-size: 4rem;'>🎓</h1>", unsafe_allow_html=True)
+            
+            st.markdown("<h2 style='text-align: center; margin-bottom: 10px;'>Study Booster Portal</h2>", unsafe_allow_html=True)
+            st.divider()
+            
+            username = st.selectbox("👤 Select Profile", ["-- Select User --"] + list(ALLOWED_USERS.keys()))
+            pwd = st.text_input("🔑 Enter Passcode", type="password")
+            
+            st.write("") # Spacing
+            
+            # Login button full width
+            if st.button("Secure Login 🚀", type="primary", use_container_width=True):
+                if username != "-- Select User --" and ALLOWED_USERS.get(username) == pwd:
+                    st.session_state.auth = True
+                    st.session_state.current_user = username
+                    st.rerun()
+                else:
+                    st.error("❌ Invalid Credentials! Please check your name and passcode.")
     st.stop()
 
 # ==========================================
@@ -157,16 +128,15 @@ def generate_report(score, total):
 # 5. SIDEBAR NAVIGATION
 # ==========================================
 st.sidebar.markdown(f"### 👤 {st.session_state.current_user}")
-st.sidebar.write("---")
+st.sidebar.divider()
 
-# Conditional Menu based on Role
 if "Admin" in st.session_state.current_user:
     menu = st.sidebar.radio("Navigation", ["📚 Load Quiz", "📝 Live Exam", "⚙️ Manage Database"])
 else:
     menu = st.sidebar.radio("Navigation", ["📚 Load Quiz", "📝 Live Exam"])
 
-st.sidebar.write("---")
-if st.sidebar.button("🚪 Logout", type="secondary"):
+st.sidebar.divider()
+if st.sidebar.button("🚪 Logout", type="secondary", use_container_width=True):
     st.session_state.auth = False
     st.rerun()
 
@@ -195,16 +165,16 @@ if menu == "📚 Load Quiz":
             with col1:
                 st.markdown(f"#### 📄 {file.replace('.csv', '')}")
             with col2:
-                if st.button("Load Quiz", key=f"load_{file}", type="primary"):
+                if st.button("Load Quiz", key=f"load_{file}", type="primary", use_container_width=True):
                     load_quiz(file)
                     st.success(f"Quiz Loaded! Go to 'Live Exam' from sidebar.")
 
 # ==========================================
-# 7. LIVE EXAM MODULE (The Real Deal)
+# 7. LIVE EXAM MODULE
 # ==========================================
 elif menu == "📝 Live Exam":
     if not st.session_state.quiz_ready:
-        st.warning("⚠️ No active test. Please load a quiz first.")
+        st.warning("⚠️ No active test. Please load a quiz from Dashboard first.")
         st.stop()
         
     # --- RESULT SCREEN ---
@@ -216,15 +186,18 @@ elif menu == "📝 Live Exam":
         st.success("Exam submitted successfully!")
         
         c1, c2, c3 = st.columns(3)
-        c1.metric("Total Questions", total_q)
-        c2.metric("Attempted", len(st.session_state.user_answers))
-        c3.metric("Final Score", f"{score} / {total_q}")
+        with st.container(border=True):
+            c1.metric("Total Questions", total_q)
+        with st.container(border=True):
+            c2.metric("Attempted", len([k for k,v in st.session_state.user_answers.items() if v != "Not Attempted"]))
+        with st.container(border=True):
+            c3.metric("Final Score", f"{score} / {total_q}")
         
         if score == total_q and total_q > 0: st.balloons()
         
-        st.write("---")
+        st.divider()
         report_data = generate_report(score, total_q)
-        st.download_button("📥 Download Detailed Report Card", data=report_data, file_name=f"{st.session_state.topic}_Result.txt")
+        st.download_button("📥 Download Detailed Report Card", data=report_data, file_name=f"{st.session_state.topic}_Result.txt", type="primary")
         
     # --- ACTIVE EXAM SCREEN ---
     else:
@@ -232,14 +205,14 @@ elif menu == "📝 Live Exam":
         total_q = len(st.session_state.questions)
         q_data = st.session_state.questions[q_idx]
 
-        # Top Bar: Topic Name & Submit Button (Right side)
+        # Top Bar: Topic Name & Next/Submit Button (Right side)
         c_title, c_btn = st.columns([4, 1])
         with c_title:
-            st.markdown(f"<h3 style='color:#4F46E5;'>{st.session_state.topic}</h3>", unsafe_allow_html=True)
+            st.markdown(f"<h3 style='color:#1E293B;'>{st.session_state.topic}</h3>", unsafe_allow_html=True)
         with c_btn:
             is_last = (q_idx == total_q - 1)
-            btn_txt = "Submit Exam 🚀" if is_last else "Next Question ➡️"
-            if st.button(btn_txt, type="primary"):
+            btn_txt = "Final Submit 🚀" if is_last else "Next Question ➡️"
+            if st.button(btn_txt, type="primary", use_container_width=True):
                 if st.session_state.get('curr_choice'):
                     st.session_state.user_answers[q_idx] = st.session_state.curr_choice
                     if is_last:
@@ -248,22 +221,24 @@ elif menu == "📝 Live Exam":
                         st.session_state.current_q += 1
                     st.rerun()
                 else:
-                    st.error("⚠️ Please select an answer to proceed!")
+                    st.error("⚠️ Please select an answer!")
 
         st.progress((q_idx) / total_q)
-        st.write("---")
+        st.divider()
         
-        # Question Area
-        st.markdown(f"#### Q{q_idx + 1}. {q_data['q']}")
-        
-        # Options Radio
-        saved_ans = st.session_state.user_answers.get(q_idx, None)
-        try:
-            def_idx = q_data['options'].index(saved_ans) if saved_ans else None
-        except:
-            def_idx = None
+        # Question Area (Inside a clean card)
+        with st.container(border=True):
+            st.markdown(f"#### Q{q_idx + 1}. {q_data['q']}")
+            st.write("") # Spacing
             
-        st.session_state.curr_choice = st.radio("Select your option:", q_data['options'], index=def_idx)
+            # Options Radio
+            saved_ans = st.session_state.user_answers.get(q_idx, None)
+            try:
+                def_idx = q_data['options'].index(saved_ans) if saved_ans else None
+            except:
+                def_idx = None
+                
+            st.session_state.curr_choice = st.radio("Select your option:", q_data['options'], index=def_idx, label_visibility="collapsed")
 
 # ==========================================
 # 8. MANAGE DATABASE (Admin Only)
@@ -279,9 +254,10 @@ elif menu == "⚙️ Manage Database":
             file_path = os.path.join(CSV_FOLDER, file)
             dt = datetime.fromtimestamp(os.path.getmtime(file_path)).strftime("%d %b %Y")
             
-            c1, c2, c3 = st.columns([3, 2, 1])
-            c1.write(f"**{file}**")
-            c2.write(dt)
-            if c3.button("Delete ❌", key=f"del_{file}"):
-                os.remove(file_path)
-                st.rerun()
+            with st.container(border=True):
+                c1, c2, c3 = st.columns([3, 2, 1])
+                c1.write(f"**{file}**")
+                c2.write(dt)
+                if c3.button("Delete ❌", key=f"del_{file}"):
+                    os.remove(file_path)
+                    st.rerun()
