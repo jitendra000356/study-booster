@@ -33,7 +33,7 @@ def add_bg_from_local(image_file):
 
 add_bg_from_local('bg.jpg') 
 
-# 🛠️ BASE CSS (Dark Mode Text Fix + Left Area)
+# 🛠️ BASE CSS (Dark Mode Button Fix)
 st.markdown("""
     <style>
     .block-container { 
@@ -47,7 +47,7 @@ st.markdown("""
     }
     header[data-testid="stHeader"] { background-color: transparent !important; }
     
-    /* 🎯 DARK MODE FIX: Force text to be dark inside the main white container */
+    /* Force text to be dark inside the main white container */
     section[data-testid="stMain"] p, 
     section[data-testid="stMain"] h1, 
     section[data-testid="stMain"] h2, 
@@ -58,25 +58,31 @@ st.markdown("""
     section[data-testid="stMain"] label, 
     section[data-testid="stMain"] span,
     section[data-testid="stMain"] div[data-baseweb="radio"] div {
-        color: #0f172a !important; /* Dark Grey/Black text for readability */
+        color: #0f172a !important; 
     }
 
-    /* Left Panel Navigation Buttons */
+    /* 🎯 FIX: Sabhi Normal Buttons (Previous, Clear, Palette) ko White BG & Black Text Dena */
     div.stButton > button { 
+        background-color: #ffffff !important; 
+        border: 1px solid #cbd5e1 !important;
         border-radius: 8px !important; 
         font-weight: bold !important; 
         padding: 0.2rem 0.1rem !important; 
         width: 100%;
         font-size: 14px !important;
     }
+    div.stButton > button p, div.stButton > button span {
+        color: #000000 !important;
+    }
+
+    /* Primary Buttons (Next, Submit) ko Blue BG aur White Text dena */
     div.stButton > button[kind="primary"] { 
         background-color: #4F46E5 !important; 
-        color: white !important; 
-        border-radius: 6px !important; font-weight: bold !important; 
+        border: none !important;
+        border-radius: 6px !important; 
     }
-    /* Protect Primary Button Text from becoming dark */
-    div.stButton > button[kind="primary"] * {
-        color: white !important;
+    div.stButton > button[kind="primary"] p, div.stButton > button[kind="primary"] span {
+        color: #ffffff !important;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -144,7 +150,6 @@ def load_quiz(file_name, timer_mode, time_minutes):
 # ==========================================
 # 5. DASHBOARD & SIDEBAR
 # ==========================================
-# 🎯 Added Logo in Sidebar
 try:
     st.sidebar.image("logo.png", use_container_width=True)
 except:
@@ -296,13 +301,19 @@ elif menu == "📝 Live Exam":
                                     style.innerHTML = `
                                         .my-palette::-webkit-scrollbar { width: 5px; }
                                         .my-palette::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 5px; }
+                                        
+                                        /* 🎯 JS HACK FOR PALETTE BUTTONS IN DARK MODE */
                                         .my-palette div.stButton > button {
+                                            background-color: #ffffff !important;
                                             padding: 0px !important;
                                             font-size: 13px !important;
                                             height: 38px !important;
                                             min-height: 38px !important;
                                             border-radius: 6px !important;
                                             border: 1px solid #cbd5e1 !important;
+                                        }
+                                        .my-palette div.stButton > button p {
+                                            color: #000000 !important;
                                         }
                                         .my-palette div[data-testid="column"] { padding: 2px !important; }
                                     `;
