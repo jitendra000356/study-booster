@@ -21,6 +21,18 @@ CSV_FOLDER = 'saved_csvs'
 if not os.path.exists(CSV_FOLDER): 
     os.makedirs(CSV_FOLDER)
 
+# Initialize Default Folder Structure
+DEFAULT_STRUCTURE = {
+    "Science": ["Physics", "Chemistry", "Biology", "Environment"],
+    "Arts": ["History", "Polity", "Geography", "Economics"],
+    "Statistics": []
+}
+for root_cat, sub_cats in DEFAULT_STRUCTURE.items():
+    root_path = os.path.join(CSV_FOLDER, root_cat)
+    os.makedirs(root_path, exist_ok=True)
+    for sub_cat in sub_cats:
+        os.makedirs(os.path.join(root_path, sub_cat), exist_ok=True)
+
 ATTEMPTS_FILE = 'attempts_data.json'
 TIMERS_FILE = 'timers_data.json'
 
@@ -39,6 +51,29 @@ ALLOWED_USERS = {
 # ==========================================
 # DATA MANAGEMENT FUNCTIONS
 # ==========================================
+
+def get_all_csv_files(base_dir=CSV_FOLDER):
+    """Recursively fetches all CSV files across folders and subfolders."""
+    csv_files = []
+    for root, dirs, files in os.walk(base_dir):
+        for f in files:
+            if f.endswith('.csv'):
+                rel_path = os.path.relpath(os.path.join(root, f), base_dir)
+                csv_files.append(rel_path.replace(os.sep, '/'))
+    return sorted(csv_files)
+
+def nav_admin_up():
+    curr = st.session_state.admin_current_path
+    if curr:
+        parts = curr.split('/')
+        st.session_state.admin_current_path = '/'.join(parts[:-1])
+
+def nav_admin_down(folder):
+    curr = st.session_state.admin_current_path
+    if curr:
+        st.session_state.admin_current_path = curr + '/' + folder
+    else:
+        st.session_state.admin_current_path = folder
 
 # -- Attempts Logic --
 def load_attempts_data():
@@ -121,7 +156,8 @@ def init_session():
         'active_page': "Dashboard",
         'is_paused': False,
         'current_test_filename': "",
-        'attempt_recorded': False
+        'attempt_recorded': False,
+        'admin_current_path': ""
     }
     for key, value in default_state.items():
         if key not in st.session_state:
@@ -187,7 +223,7 @@ def record_activity():
 def load_quiz(file_name):
     """Parses CSV correctly, filtering empty options, applies stored timer settings, and resets exam state."""
     st.session_state.questions = []
-    file_path = os.path.join(CSV_FOLDER, file_name)
+    file_path = os.path.join(CSV_FOLDER, file_name.replace('/', os.sep))
     
     with open(file_path, 'r', encoding='utf-8-sig', errors='ignore') as f:
         reader = csv.DictReader(f)
@@ -223,7 +259,7 @@ def load_quiz(file_name):
         t_val = t_config["value"]
         rem_sec = t_val * 60
             
-    st.session_state.topic = os.path.splitext(file_name)[0].replace("_", " ")
+    st.session_state.topic = os.path.basename(file_name).replace('.csv', '').replace("_", " ")
     st.session_state.quiz_ready = True
     st.session_state.current_q = 0
     st.session_state.user_answers = {}
@@ -569,54 +605,88 @@ def render_dashboard():
     
     if "Admin" in st.session_state.current_user:
         
-        # --- FEATURE 1: CSV MANAGEMENT ADMIN PANEL ---
-        with st.expander("📁 Admin Panel: CSV Management", expanded=False):
-            st.markdown("#### 📤 Upload New CSV")
-            uploaded_file = st.file_uploader("Upload CSV Format File", type=['csv'])
-            if uploaded_file:
-                save_path = os.path.join(CSV_FOLDER, uploaded_file.name)
-                if os.path.exists(save_path):
-                    st.error(f"File '{uploaded_file.name}' already exists. Please delete it first or rename your file.")
-                else:
+        # --- FEATURE: QUESTION BANK MANAGEMENT (Folder/Subfolder Support) ---
+        with st.expander("📁 Admin Panel: Question Bank Management", expanded=False):
+            current_admin_path = st.session_state.get('admin_current_path', '')
+            full_admin_path = os.path.join(CSV_FOLDER, current_admin_path.replace('/', os.sep))
+            
+            st.markdown(f"**Current Folder:** `Question Bank / {current_admin_path.replace('/', ' / ')}`")
+            
+            c_up, c_newf, c_upld = st.columns(3)
+            with c_up:
+                if current_admin_path != '':
+                    st.button("⬅️ Back / Up", on_click=nav_admin_up, use_container_width=True)
+            with c_newf:
+                new_f = st.text_input("New Folder", key="new_f_input", label_visibility="collapsed", placeholder="Folder Name")
+                if st.button("Create Folder", use_container_width=True):
+                    if new_f:
+                        os.makedirs(os.path.join(full_admin_path, new_f), exist_ok=True)
+                        st.rerun()
+            with c_upld:
+                uploaded_file = st.file_uploader("Upload CSV", type=['csv'], label_visibility="collapsed")
+                if uploaded_file:
+                    save_path = os.path.join(full_admin_path, uploaded_file.name)
                     with open(save_path, "wb") as f:
                         f.write(uploaded_file.getbuffer())
-                    st.success("✅ Test uploaded successfully!")
+                    st.success("Uploaded!")
                     time.sleep(1)
                     st.rerun()
+                    
+            st.write("---")
             
-            st.markdown("#### 📋 Available CSV Files")
-            all_tests_admin = [f for f in os.listdir(CSV_FOLDER) if f.endswith('.csv')]
-            if not all_tests_admin:
-                st.info("No CSV files found.")
-            else:
-                for f_name in all_tests_admin:
-                    file_p = os.path.join(CSV_FOLDER, f_name)
-                    f_size = os.path.getsize(file_p) / 1024 # KB Size
-                    
-                    # Fast calculate Total Questions
-                    q_cnt = 0
-                    with open(file_p, 'r', encoding='utf-8-sig', errors='ignore') as f:
-                        q_cnt = sum(1 for _ in f) - 1 # Subtract Header
-                    
-                    c1, c2, c3 = st.columns([4, 2, 2])
-                    c1.markdown(f"**{f_name}**")
-                    c2.markdown(f"Questions: {q_cnt} | Size: {f_size:.1f} KB")
-                    c3.markdown("")
-                
-                st.markdown("#### 🗑️ Delete CSV")
-                del_file = st.selectbox("Select file to delete", ["-- Select --"] + all_tests_admin)
-                if del_file != "-- Select --":
-                    if st.checkbox(f"Are you sure you want to delete {del_file}?"):
-                        if st.button("Yes, Delete Test", type="primary"):
-                            os.remove(os.path.join(CSV_FOLDER, del_file))
-                            st.success(f"Deleted {del_file}!")
-                            time.sleep(1)
+            items = sorted(os.listdir(full_admin_path)) if os.path.exists(full_admin_path) else []
+            folders = [f for f in items if os.path.isdir(os.path.join(full_admin_path, f))]
+            files = [f for f in items if f.endswith('.csv')]
+            
+            st.markdown("#### Folders")
+            if not folders: st.info("No subfolders.")
+            for folder in folders:
+                fc1, fc2 = st.columns([8, 2])
+                fc1.button(f"📁 {folder}", key=f"nav_{current_admin_path}_{folder}", on_click=nav_admin_down, args=(folder,), use_container_width=True)
+                if current_admin_path == "" and folder in ["Science", "Arts", "Statistics"]:
+                    fc2.markdown("<div style='padding-top:10px; color:#94a3b8; font-size:12px; font-weight:bold;'>System Folder</div>", unsafe_allow_html=True)
+                else:
+                    if fc2.button("🗑️ Delete", key=f"del_f_{current_admin_path}_{folder}", use_container_width=True):
+                        try:
+                            os.rmdir(os.path.join(full_admin_path, folder))
                             st.rerun()
+                        except OSError:
+                            st.error("Folder not empty! Delete files inside first.")
+                            
+            st.write("---")
+            st.markdown("#### Files")
+            if not files: st.info("No files in this folder.")
+            
+            # Pre-calculate all folders for Move operation
+            all_folders = []
+            for root, dirs, _ in os.walk(CSV_FOLDER):
+                for d in dirs:
+                    rel = os.path.relpath(os.path.join(root, d), CSV_FOLDER).replace(os.sep, '/')
+                    all_folders.append(rel)
+            all_folders.insert(0, "Root")
+            
+            for f_name in files:
+                file_p = os.path.join(full_admin_path, f_name)
+                f_size = os.path.getsize(file_p) / 1024
+                
+                c1, c2, c3, c4 = st.columns([4, 2, 3, 2])
+                c1.markdown(f"📄 **{f_name}**")
+                c2.markdown(f"{f_size:.1f} KB")
+                
+                move_target = c3.selectbox("Move to", ["-- Select --"] + all_folders, key=f"mov_{current_admin_path}_{f_name}", label_visibility="collapsed")
+                if move_target != "-- Select --":
+                    tgt = CSV_FOLDER if move_target == "Root" else os.path.join(CSV_FOLDER, move_target.replace('/', os.sep))
+                    os.rename(file_p, os.path.join(tgt, f_name))
+                    st.rerun()
+                    
+                if c4.button("🗑️ Delete", key=f"del_{current_admin_path}_{f_name}", use_container_width=True):
+                    os.remove(file_p)
+                    st.rerun()
 
-        # --- FEATURE 2: TIMER MANAGEMENT ADMIN PANEL ---
+        # --- PREVIOUS TIMER MANAGEMENT (Updated to use recursive get_all_csv_files) ---
         with st.expander("⏱️ Admin Panel: Timer Management", expanded=False):
             st.markdown("Configure timer rules for each test individually.")
-            all_tests_admin_tmr = [f for f in os.listdir(CSV_FOLDER) if f.endswith('.csv')]
+            all_tests_admin_tmr = get_all_csv_files()
             
             if all_tests_admin_tmr:
                 t_file = st.selectbox("Select Test to Configure Timer", all_tests_admin_tmr, key="tmr_test")
@@ -641,18 +711,18 @@ def render_dashboard():
                     if st.button("Save Timer Settings", type="primary"):
                         timers_data[t_file] = {"mode": new_mode, "value": new_val}
                         save_timers_data(timers_data)
-                        st.success(f"✅ Timer settings saved for {t_file}!")
+                        st.success(f"✅ Timer settings saved for {os.path.basename(t_file)}!")
             else:
                 st.info("No tests available to configure.")
 
-        # --- ATTEMPT MANAGEMENT ADMIN PANEL ---
+        # --- PREVIOUS ATTEMPT MANAGEMENT (Updated to use recursive get_all_csv_files) ---
         with st.expander("⚙️ Admin Panel: Attempt Management", expanded=False):
             st.markdown("Select a user and a test to modify attempt limits.")
             a_col1, a_col2 = st.columns(2)
             with a_col1:
                 sel_user = st.selectbox("Select User", list(ALLOWED_USERS.keys()), key="adm_user")
             with a_col2:
-                all_tests_admin_att = [f for f in os.listdir(CSV_FOLDER) if f.endswith('.csv')]
+                all_tests_admin_att = get_all_csv_files()
                 if all_tests_admin_att:
                     sel_test = st.selectbox("Select Test", all_tests_admin_att, key="adm_test")
                 else:
@@ -663,30 +733,60 @@ def render_dashboard():
                 new_limit = st.number_input("Allowed Attempts", min_value=1, value=curr_data['allowed'], key="adm_limit")
                 if st.button("Update Limit", type="primary", key="btn_update_limit"):
                     set_allowed_attempts(sel_user, sel_test, new_limit)
-                    st.success(f"✅ Updated! {sel_user.split()[0]} now has {new_limit} allowed attempts for {sel_test.replace('.csv', '').replace('_', ' ')}.")
+                    st.success(f"✅ Updated! {sel_user.split()[0]} now has {new_limit} allowed attempts for {os.path.basename(sel_test)}.")
     
-    # --- STUDENTS VIEW (DASHBOARD TESTS LIST) ---
+    # --- STUDENTS VIEW (DASHBOARD TESTS LIST W/ FOLDERS & SEARCH) ---
     col_space1, col_tests, col_space2 = st.columns([1, 4, 1])
     
     with col_tests:
         st.markdown("### 📋 Available Test Series")
-        files = [f for f in os.listdir(CSV_FOLDER) if f.endswith('.csv')]
         
-        if not files: 
-            st.info("No test series available right now. Contact Administrator.")
+        # Search Feature
+        search_query = st.text_input("🔍 Search Test, Subject, or Folder...", "").strip()
+        
+        all_files = get_all_csv_files()
+        files_to_display = []
+        
+        if search_query:
+            files_to_display = [f for f in all_files if search_query.lower() in f.lower()]
+        else:
+            cat_col1, cat_col2 = st.columns(2)
+            root_folders = sorted([d for d in os.listdir(CSV_FOLDER) if os.path.isdir(os.path.join(CSV_FOLDER, d))])
+            
+            with cat_col1:
+                sel_cat = st.selectbox("Category", root_folders) if root_folders else None
+            
+            if sel_cat:
+                cat_path = os.path.join(CSV_FOLDER, sel_cat)
+                sub_folders = sorted([d for d in os.listdir(cat_path) if os.path.isdir(os.path.join(cat_path, d))])
+                with cat_col2:
+                    if sub_folders:
+                        sel_sub = st.selectbox("Subcategory", ["All"] + sub_folders)
+                    else:
+                        sel_sub = "All"
+                        
+                filter_prefix = sel_cat if sel_sub == "All" else f"{sel_cat}/{sel_sub}"
+                
+                files_to_display = [f for f in all_files if f.startswith(filter_prefix)]
+        
+        if not files_to_display: 
+            st.info("No tests found matching your criteria.")
         else:
             with st.container(border=True):
-                for file in files:
+                for file in files_to_display:
                     user = st.session_state.current_user
                     attempt_data = get_attempt_data(user, file)
                     allowed = attempt_data['allowed']
                     used = attempt_data['used']
                     remaining = allowed - used
 
+                    base_name = os.path.basename(file).replace('.csv', '').replace('_', ' ')
+                    folder_context = os.path.dirname(file) or 'Root'
+
                     c1, c2 = st.columns([3, 1])
-                    c1.markdown(f"<h5 style='margin-top: 10px; margin-bottom: 2px;'>📄 {file.replace('.csv', '').replace('_', ' ')}</h5>", unsafe_allow_html=True)
+                    c1.markdown(f"<h5 style='margin-top: 10px; margin-bottom: 2px;'>📄 {base_name}</h5>", unsafe_allow_html=True)
+                    c1.markdown(f"<p style='font-size: 0.8rem; color: #94a3b8; margin-top: 0; margin-bottom: 2px;'>📂 {folder_context.replace('/', ' / ')}</p>", unsafe_allow_html=True)
                     
-                    # Display updated attempts count
                     c1.markdown(f"<p style='font-size: 0.85rem; color: #64748b; margin-top: 0;'>Attempts: {used} / {allowed} &nbsp;|&nbsp; Remaining: {remaining}</p>", unsafe_allow_html=True)
                     
                     if remaining > 0:
