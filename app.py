@@ -908,7 +908,7 @@ def render_exam():
         username_display = st.session_state.current_user.split()[0]
         avatar_letter = username_display[0].upper() if username_display else "U"
         
-        # Testbook-style Profile & Legend Redesign securely updated with dynamic live counts
+        # Testbook-style Profile & Legend Redesign securely updated with accurate dynamic live counts and precise shapes
         html_legend = f"""
 <div style="background-color: #ffffff; padding: 15px; border-bottom: 1px solid #bfdbfe; margin: 10px -1.5rem 0 -1.5rem;">
 <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
@@ -919,7 +919,7 @@ def render_exam():
 </div>
 <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px 4px; font-size: 11px; color: #475569;">
 <div style="display: flex; align-items: center; gap: 4px;">
-<div style="width: 18px; height: 18px; background-color: #2bc765; color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 10px;">{ans_count}</div>
+<div style="width: 18px; height: 18px; background-color: #2bc765; color: white; border-radius: 50% 50% 0 0; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 10px;">{ans_count}</div>
 <span>Answered</span>
 </div>
 <div style="display: flex; align-items: center; gap: 4px;">
@@ -927,15 +927,15 @@ def render_exam():
 <span>Marked</span>
 </div>
 <div style="display: flex; align-items: center; gap: 4px;">
-<div style="width: 18px; height: 18px; background-color: #ffffff; border: 1px solid #cbd5e1; color: #333; border-radius: 3px; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 10px;">{not_visit_count}</div>
+<div style="width: 18px; height: 18px; background-color: #ffffff; border: 1px solid #cbd5e1; color: #333; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 10px;">{not_visit_count}</div>
 <span>Not Visited</span>
 </div>
 <div style="display: flex; align-items: center; gap: 4px; grid-column: span 2;">
-<div style="width: 18px; height: 18px; background-color: #9d48b1; color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 10px; position: relative;">{ans_marked_count}<div style="position: absolute; bottom: -2px; right: -2px; width: 8px; height: 8px; background-color: #2bc765; border-radius: 50%; border: 1px solid white;"></div></div>
+<div style="width: 18px; height: 18px; background-color: #9d48b1; color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 10px; position: relative; overflow: visible;">{ans_marked_count}<div style="position: absolute; bottom: -2px; right: -2px; width: 8px; height: 8px; background-color: #2bc765; border-radius: 50%; border: 1px solid white;"></div></div>
 <span>Marked and answered</span>
 </div>
 <div style="display: flex; align-items: center; gap: 4px;">
-<div style="width: 18px; height: 18px; background-color: #e55a45; color: white; border-radius: 3px; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 10px;">{not_ans_count}</div>
+<div style="width: 18px; height: 18px; background-color: #e55a45; color: white; border-radius: 0 0 50% 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 10px;">{not_ans_count}</div>
 <span>Not Answered</span>
 </div>
 </div>
@@ -971,35 +971,41 @@ def render_exam():
                 is_mark = i in st.session_state.marked_questions
                 is_curr = (i == q_idx)
                 
-                # Dynamic targeting logic: accurately map button structural index based on Streamlit rendering
+                # Dynamic targeting logic: accurately map button structural index based on Streamlit DOM rendering
                 c = (i % 5) + 1
                 r = (i // 5) + 1
                 
-                # Highly specific selector guarantees we only target the actual palette buttons, bypassing wrappers
+                # Highly specific selector guarantees we only target the actual palette buttons exactly, bypassing wrappers
                 selector = f'div[data-testid="column"]:nth-of-type(2) div[data-testid="stHorizontalBlock"]:nth-of-type(1) div[data-testid="column"]:nth-of-type({c}) div.element-container:nth-of-type({r}) button'
                 
                 css_rule = ""
                 
-                # 1. Base Status Render
+                # 1. Base Status Render with exact Testbook Shapes
                 if is_ans and is_mark:
-                    css_rule += f"{selector} {{ background-color: #9d48b1 !important; border-color: #9d48b1 !important; color: white !important; border-radius: 50% !important; }} {selector} p {{ color: white !important; }} {selector}::after {{ content: ''; position: absolute; bottom: -2px; right: -2px; width: 10px; height: 10px; background-color: #2bc765; border-radius: 50%; border: 2px solid white; z-index: 3; }}"
+                    css_rule += f"{selector} {{ background-color: #9d48b1 !important; border-color: #9d48b1 !important; color: white !important; border-radius: 50% !important; overflow: visible !important; }} "
+                    css_rule += f"{selector} p {{ color: white !important; }} "
+                    css_rule += f"{selector}::after {{ content: ''; position: absolute; bottom: -2px; right: -2px; width: 10px; height: 10px; background-color: #2bc765; border-radius: 50%; border: 2px solid white; z-index: 3; }} "
                 elif is_ans:
-                    css_rule += f"{selector} {{ background-color: #2bc765 !important; border-color: #2bc765 !important; color: white !important; }} {selector} p {{ color: white !important; }}"
+                    css_rule += f"{selector} {{ background-color: #2bc765 !important; border-color: #2bc765 !important; color: white !important; border-radius: 50px 50px 0 0 !important; }} "
+                    css_rule += f"{selector} p {{ color: white !important; }} "
                 elif is_mark:
-                    css_rule += f"{selector} {{ background-color: #9d48b1 !important; border-color: #9d48b1 !important; color: white !important; border-radius: 50% !important; }} {selector} p {{ color: white !important; }}"
+                    css_rule += f"{selector} {{ background-color: #9d48b1 !important; border-color: #9d48b1 !important; color: white !important; border-radius: 50% !important; }} "
+                    css_rule += f"{selector} p {{ color: white !important; }} "
                 elif is_vis:
-                    css_rule += f"{selector} {{ background-color: #e55a45 !important; border-color: #e55a45 !important; color: white !important; }} {selector} p {{ color: white !important; }}"
+                    css_rule += f"{selector} {{ background-color: #e55a45 !important; border-color: #e55a45 !important; color: white !important; border-radius: 0 0 50px 50px !important; }} "
+                    css_rule += f"{selector} p {{ color: white !important; }} "
                 else:
-                    css_rule += f"{selector} {{ background-color: #ffffff !important; border-color: #cbd5e1 !important; color: #475569 !important; }} {selector} p {{ color: #475569 !important; }}"
+                    css_rule += f"{selector} {{ background-color: #ffffff !important; border-color: #cbd5e1 !important; color: #475569 !important; border-radius: 4px !important; }} "
+                    css_rule += f"{selector} p {{ color: #475569 !important; }} "
                 
-                # 2. Current Highlight Overlay
+                # 2. Current Highlight Overlay (Preserves internal shape & color)
                 if is_curr:
-                    css_rule += f"{selector} {{ border: 2px solid #2563eb !important; box-shadow: 0 0 0 3px rgba(37,99,235,0.25) !important; transform: scale(1.08) !important; z-index: 2; }}"
+                    css_rule += f"{selector} {{ outline: 2px solid #2563eb !important; outline-offset: 2px !important; transform: scale(1.05) !important; z-index: 2; }} "
                     
                 dynamic_css_blocks.append(css_rule)
                 
                 with grid_cols[i % 5]:
-                    # Unwrapped st.button call allows nth-of-type selector styling injection cleanly
+                    # Unwrapped st.button call allows nth-of-type selector styling injection safely
                     st.button(f"{i+1}", key=f"pal_{i}", on_click=nav_goto, args=(i,))
 
         # Push calculated individual live question styles instantly 
