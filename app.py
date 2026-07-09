@@ -812,7 +812,7 @@ def render_exam():
     total_q = len(st.session_state.questions)
     q_data = st.session_state.questions[q_idx]
 
-    # Keeping standard CSS for the rest of the right panel and completely hiding the 3rd column
+    # STANDARD LAYOUT CSS
     st.markdown("""
     <style>
     div[data-testid="column"]:nth-of-type(2) {
@@ -822,17 +822,6 @@ def render_exam():
         padding-bottom: 15px !important;
         overflow: hidden; 
     }
-    
-    /* 100% Reliable Invisible Column for Hidden Engine */
-    div[data-testid="column"]:nth-of-type(3) {
-        display: none !important;
-        width: 0 !important;
-        height: 0 !important;
-        padding: 0 !important;
-        margin: 0 !important;
-        overflow: hidden !important;
-    }
-    
     div[data-testid="column"]:nth-of-type(2) > div[data-testid="stVerticalBlock"] > div[data-testid="stHorizontalBlock"] div.stButton > button {
         background-color: #dbeafe !important;
         color: #1e40af !important;
@@ -851,8 +840,8 @@ def render_exam():
     </style>
     """, unsafe_allow_html=True)
 
-    # Adding a 3rd hidden column to securely tuck away our trigger buttons
-    col_main, col_pal, col_hidden = st.columns([7, 3, 0.1]) 
+    # REVERTED TO 2 COLUMNS (Removed col_hidden entirely to fix the layout squeeze)
+    col_main, col_pal = st.columns([7, 3]) 
     
     ans_count = 0
     ans_marked_count = 0
@@ -925,6 +914,14 @@ def render_exam():
         )
 
         # ---------------------------------------------------------
+        # HIDDEN TRIGGER BUTTONS encapsulated inside a closed Expander
+        # ---------------------------------------------------------
+        with st.expander("System Engine", expanded=False):
+            st.markdown("<div id='hidden-engine-marker'></div>", unsafe_allow_html=True)
+            for i in range(total_q):
+                st.button(f"HBTN_{i}", key=f"hbtn_{i}", on_click=nav_goto, args=(i,))
+
+        # ---------------------------------------------------------
         # PURE HTML/JS/CSS QUESTION PALETTE
         # ---------------------------------------------------------
         grid_html = ""
@@ -995,34 +992,52 @@ def render_exam():
         </div>
         
         <script>
-            document.addEventListener("DOMContentLoaded", function() {{
+            function mapAndHide() {{
                 try {{
                     const parentDoc = window.parent.document;
                     
-                    // Identify Streamlit buttons without needing unreliable CSS selectors
-                    const stButtons = parentDoc.querySelectorAll('button');
-                    const hiddenMap = {{}};
+                    // Hide the Expander completely using JS (no CSS :has needed)
+                    const marker = parentDoc.getElementById('hidden-engine-marker');
+                    if (marker) {{
+                        const details = marker.closest('details'); 
+                        if (details) details.style.display = 'none';
+                        const expDiv = marker.closest('div[data-testid="stExpander"]');
+                        if (expDiv) expDiv.style.display = 'none';
+                    }}
 
+                    // Map the hidden buttons for clicking
+                    const stButtons = parentDoc.querySelectorAll('button');
                     stButtons.forEach(b => {{
                         if (b.innerText && b.innerText.includes('HBTN_')) {{
                             let idx = b.innerText.split('_')[1].trim(); 
-                            hiddenMap[idx] = b;
+                            window.hiddenMap[idx] = b;
                         }}
-                    }});
-
-                    // Bind HTML click to the invisible Streamlit button click
-                    const gridItems = document.querySelectorAll('.q-btn');
-                    gridItems.forEach(item => {{
-                        item.addEventListener('click', function() {{
-                            let idx = this.getAttribute('data-idx');
-                            if(hiddenMap[idx]) {{
-                                hiddenMap[idx].click();
-                            }}
-                        }});
                     }});
                 }} catch (e) {{
                     console.error("Iframe bridging blocked:", e);
                 }}
+            }}
+
+            window.hiddenMap = {{}};
+
+            document.addEventListener("DOMContentLoaded", function() {{
+                // Run immediately and setup failsafes to ensure complete removal
+                mapAndHide();
+                setTimeout(mapAndHide, 50);
+                setTimeout(mapAndHide, 200);
+
+                const gridItems = document.querySelectorAll('.q-btn');
+                gridItems.forEach(item => {{
+                    item.addEventListener('click', function() {{
+                        let idx = this.getAttribute('data-idx');
+                        if(window.hiddenMap[idx]) {{
+                            window.hiddenMap[idx].click();
+                        }} else {{
+                            mapAndHide();
+                            if(window.hiddenMap[idx]) window.hiddenMap[idx].click();
+                        }}
+                    }});
+                }});
             }});
         </script>
         </body>
@@ -1039,12 +1054,6 @@ def render_exam():
             st.button("Instructions", use_container_width=True, key="btn_inst")
             
         st.button("Submit Test", type="primary", use_container_width=True, key="btn_sub_right", on_click=nav_submit)
-
-    # ================== HIDDEN ENGINE PANEL ==================
-    # This 3rd column renders all the trigger buttons securely, but is 100% hidden by CSS
-    with col_hidden:
-        for i in range(total_q):
-            st.button(f"HBTN_{i}", key=f"hbtn_{i}", on_click=nav_goto, args=(i,))
 
     # ================== LEFT PANEL ==================
     with col_main:
