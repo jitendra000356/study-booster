@@ -33,7 +33,7 @@ def add_bg_from_local(image_file):
 
 add_bg_from_local('bg.jpg') 
 
-# 🛠️ BASE CSS (100% GUARANTEED TOP ICONS FIX)
+# 🛠️ BASE CSS (100% PERFECT TOP ICONS FIX)
 st.markdown("""
     <style>
     .block-container { 
@@ -46,33 +46,38 @@ st.markdown("""
         box-shadow: 0 4px 10px rgba(0,0,0,0.15);
     }
     
-    /* 🎯 THE ULTIMATE FIX FOR TOP ICONS (Menu & Sidebar) */
+    /* 🎯 THE ULTIMATE FIX FOR TOP ICONS (Share & Sidebar shape fix) */
     header[data-testid="stHeader"] { 
         background-color: transparent !important; 
     }
     
-    /* Targeting every possible Streamlit class for top corners */
     header[data-testid="stHeader"] button, 
     [data-testid="stToolbar"] button,
     [data-testid="collapsedControl"],
     button[kind="header"] {
         background-color: #ffffff !important; 
-        border-radius: 50% !important;
-        box-shadow: 0 4px 10px rgba(0,0,0,0.8) !important; 
-        border: 2px solid #000000 !important; 
+        border-radius: 8px !important; /* 'Share' button ke jaisa square/rounded shape */
+        box-shadow: 0 2px 5px rgba(0,0,0,0.2) !important; 
+        border: 1px solid #cbd5e1 !important; 
         opacity: 1 !important;
         visibility: visible !important;
         z-index: 99999 !important;
+        color: #000000 !important;
     }
     
-    /* Forcing all icons inside them to be pure black */
+    /* Only fix text/icon color without thick strokes */
     header[data-testid="stHeader"] button *, 
     [data-testid="stToolbar"] button *,
     [data-testid="collapsedControl"] *,
     button[kind="header"] * {
-        fill: #000000 !important;
         color: #000000 !important;
-        stroke: #000000 !important;
+    }
+    
+    header[data-testid="stHeader"] button svg, 
+    [data-testid="stToolbar"] button svg,
+    [data-testid="collapsedControl"] svg,
+    button[kind="header"] svg {
+        fill: currentColor !important;
     }
     
     /* Force text to be dark inside the main white container */
@@ -250,7 +255,7 @@ elif menu == "📝 Live Exam":
             else: st.error(f"Your: {user_ans} (❌) | Correct: {correct_ans}")
         st.stop()
             
-    # --- PHASE 3: ACTIVE EXAM (FIXED INDEPENDENT SCROLL) ---
+    # --- PHASE 3: ACTIVE EXAM ---
     else:
         if st.session_state.timer_mode == "Total Time (Minutes)" and (st.session_state.end_time - time.time()) <= 0:
             st.session_state.quiz_completed = True; st.rerun()
@@ -262,7 +267,6 @@ elif menu == "📝 Live Exam":
 
         col_main, col_pal = st.columns([3.5, 1.2]) 
         
-        # 📌 RIGHT PANEL
         with col_pal:
             timer_code = ""
             ui_code = ""
@@ -369,7 +373,6 @@ elif menu == "📝 Live Exam":
                         st.session_state.current_q = i
                         st.rerun()
 
-        # 👈 LEFT PANEL
         with col_main:
             st.markdown(f"<h3 style='color:#4F46E5 !important; margin-top:0;'>{st.session_state.topic}</h3>", unsafe_allow_html=True)
             st.write("---")
