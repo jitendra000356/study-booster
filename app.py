@@ -33,7 +33,7 @@ def add_bg_from_local(image_file):
 
 add_bg_from_local('bg.jpg') 
 
-# 🛠️ BASE CSS (Dark Mode Button Fix)
+# 🛠️ BASE CSS (Top Menu & Sidebar Toggle Button Fix Included)
 st.markdown("""
     <style>
     .block-container { 
@@ -46,6 +46,17 @@ st.markdown("""
         box-shadow: 0 4px 10px rgba(0,0,0,0.15);
     }
     header[data-testid="stHeader"] { background-color: transparent !important; }
+    
+    /* 🎯 FIX FOR TOP CORNERS (Settings & Sidebar Toggle) */
+    header[data-testid="stHeader"] button, [data-testid="collapsedControl"] {
+        background-color: rgba(255, 255, 255, 0.7) !important;
+        border-radius: 50% !important;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1) !important;
+    }
+    header[data-testid="stHeader"] svg, [data-testid="collapsedControl"] svg {
+        fill: #000000 !important;
+        color: #000000 !important;
+    }
     
     /* Force text to be dark inside the main white container */
     section[data-testid="stMain"] p, 
@@ -61,7 +72,7 @@ st.markdown("""
         color: #0f172a !important; 
     }
 
-    /* 🎯 FIX: Sabhi Normal Buttons (Previous, Clear, Palette) ko White BG & Black Text Dena */
+    /* Sabhi Normal Buttons (Previous, Clear, Palette) ko White BG & Black Text Dena */
     div.stButton > button { 
         background-color: #ffffff !important; 
         border: 1px solid #cbd5e1 !important;
@@ -301,8 +312,6 @@ elif menu == "📝 Live Exam":
                                     style.innerHTML = `
                                         .my-palette::-webkit-scrollbar { width: 5px; }
                                         .my-palette::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 5px; }
-                                        
-                                        /* 🎯 JS HACK FOR PALETTE BUTTONS IN DARK MODE */
                                         .my-palette div.stButton > button {
                                             background-color: #ffffff !important;
                                             padding: 0px !important;
