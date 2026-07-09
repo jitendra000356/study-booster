@@ -7,10 +7,12 @@ import base64
 from datetime import datetime
 
 # ==========================================
-# 1. PAGE CONFIGURATION & SUPER STICKY CSS
+# 1. PAGE CONFIGURATION & SPACE UTILIZATION
 # ==========================================
+# layout="wide" se left/right ka khali space use hoga
 st.set_page_config(page_title="Study Booster", page_icon="🎓", layout="wide", initial_sidebar_state="collapsed")
 
+# 🖼️ Background Image Function
 def add_bg_from_local(image_file):
     try:
         with open(image_file, "rb") as image_file:
@@ -24,12 +26,6 @@ def add_bg_from_local(image_file):
                 background-position: center;
                 background-attachment: fixed;
             }}
-            .stApp > header {{ background-color: transparent !important; }}
-            div[data-testid="stVerticalBlock"] > div {{
-                background-color: rgba(255, 255, 255, 0.94);
-                border-radius: 12px;
-                padding: 12px;
-            }}
             </style>
             """,
             unsafe_allow_html=True
@@ -39,21 +35,44 @@ def add_bg_from_local(image_file):
 
 add_bg_from_local('bg.jpg') 
 
-# 🛠️ REAL STICKY CSS (Streamlit Layout Override)
+# 🛠️ ULTRA-PRO CLEAN CSS (FIXED BOXING ISSUE)
 st.markdown("""
     <style>
-    .block-container { padding-top: 1rem !important; padding-bottom: 1rem !important; }
-    div.stButton > button { border-radius: 6px !important; font-weight: 600 !important; width: 100%; }
-    div.stButton > button[kind="primary"] { background-color: #4F46E5 !important; color: white !important; }
-    
-    /* 📌 STICKY COLUMN FIX: Streamlit ke default layout ko force karna */
-    section[data-testid="stMain"] .block-container {
-        overflow: visible !important;
+    /* Main container ko full width dena aur background fix karna */
+    .block-container { 
+        max-width: 96% !important; /* Screen ka 96% hissa use karega */
+        padding-top: 1.5rem !important; 
+        padding-bottom: 1.5rem !important; 
+        background-color: rgba(255, 255, 255, 0.95); /* Sirf ek main safed background */
+        border-radius: 12px;
+        margin-top: 15px;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.15);
     }
+    
+    header[data-testid="stHeader"] { background-color: transparent !important; }
+
+    /* Palette Grid Buttons - Chhote aur gol (Compact & Clear) */
+    div.stButton > button { 
+        border-radius: 8px !important; 
+        font-weight: bold !important; 
+        padding: 0.2rem 0.1rem !important; /* Padding kam kardi taaki number saaf dikhe */
+        width: 100%;
+        font-size: 14px !important;
+    }
+    
+    /* Primary buttons (Next/Submit) ko alag color dena */
+    div.stButton > button[kind="primary"] { 
+        background-color: #4F46E5 !important; 
+        color: white !important; 
+        padding: 0.5rem 1rem !important; /* Inko bada rakha hai */
+        font-size: 16px !important;
+    }
+
+    /* 📌 STICKY RIGHT COLUMN (Timer aur Palette ke liye) */
     div[data-testid="column"]:nth-of-type(2) {
         position: -webkit-sticky !important;
         position: sticky !important;
-        top: 60px !important;
+        top: 20px !important;
         align-self: flex-start !important;
         z-index: 999 !important;
     }
@@ -79,7 +98,7 @@ if 'auth' not in st.session_state:
 # 3. LOGIN SCREEN
 # ==========================================
 if not st.session_state.auth:
-    col1, col2, col3 = st.columns([1, 1.2, 1])
+    col1, col2, col3 = st.columns([1, 1.5, 1]) # Center div bada kiya
     with col2:
         st.write("") 
         with st.container(border=True):
@@ -197,7 +216,7 @@ elif menu == "📝 Live Exam":
             else: st.error(f"Your: {user_ans} (❌) | Correct: {correct_ans}")
         st.stop()
             
-    # --- PHASE 3: ACTIVE EXAM (FIXED SCROLL LAYOUT) ---
+    # --- PHASE 3: ACTIVE EXAM (FULL WIDTH & CLEAN LAYOUT) ---
     else:
         if st.session_state.timer_mode == "Total Time (Minutes)":
             remaining_time = st.session_state.end_time - time.time()
@@ -210,17 +229,18 @@ elif menu == "📝 Live Exam":
         total_q = len(st.session_state.questions)
         q_data = st.session_state.questions[q_idx]
 
-        col_main, col_pal = st.columns([3, 1])
+        # 👈 Left Space (75%) for Question | 👉 Right Space (25%) for Palette
+        col_main, col_pal = st.columns([3.5, 1.5]) 
         
-        # 📌 RIGHT PANEL (Sticky + Native Scrollbar)
+        # 📌 RIGHT PANEL (Timer & Palette)
         with col_pal:
             if st.session_state.timer_mode == "Total Time (Minutes)":
                 rem_sec = int(st.session_state.end_time - time.time())
                 timer_html = f"""
                 <!DOCTYPE html>
                 <html><head><style>
-                body {{ margin:0; padding:5px; font-family:sans-serif; display:flex; justify-content:center; align-items:center; background:transparent; }}
-                .timer-box {{ background-color:#fee2e2; border:2px solid #ef4444; color:#dc2626; padding:8px 0; border-radius:8px; font-size:22px; font-weight:bold; text-align:center; width:100%; box-shadow:0 4px 6px -1px rgba(0,0,0,0.1); }}
+                body {{ margin:0; padding:0; font-family:sans-serif; display:flex; justify-content:center; align-items:center; background:transparent; }}
+                .timer-box {{ background-color:#fee2e2; border:2px solid #ef4444; color:#dc2626; padding:6px 0; border-radius:8px; font-size:22px; font-weight:bold; text-align:center; width:100%; box-shadow:0 2px 4px rgba(0,0,0,0.1); }}
                 </style></head><body>
                     <div class="timer-box">⏳ <span id="time">00:00</span></div>
                     <script>
@@ -230,70 +250,3 @@ elif menu == "📝 Live Exam":
                             var distance = countDownDate - now;
                             if (distance <= 0) {{
                                 clearInterval(x); document.getElementById("time").innerHTML = "TIME UP!";
-                                var buttons = window.parent.document.querySelectorAll('button');
-                                for(var i=0; i<buttons.length; i++) {{ if(buttons[i].innerText.includes('Final Submit')) {{ buttons[i].click(); break; }} }}
-                            }} else {{
-                                var m = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
-                                var s = Math.floor((distance % (1000 * 60)) / 1000);
-                                m = m < 10 ? "0" + m : m; s = s < 10 ? "0" + s : s;
-                                document.getElementById("time").innerHTML = m + ":" + s;
-                            }}
-                        }}, 1000);
-                    </script>
-                </body></html>
-                """
-                components.html(timer_html, height=85) 
-            
-            st.markdown("<h5 style='text-align:center; margin-top:0;'>Question Palette</h5>", unsafe_allow_html=True)
-            st.markdown("<p style='text-align:center; font-size:11px; margin-bottom:5px;'>🔵 Curr | 🟢 Ans | 🔴 Skip | ⚪ Unvisit</p>", unsafe_allow_html=True)
-            
-            # 🔄 NATIVE STREAMLIT SCROLL CONTAINER (Height=350 ensures scrollbar appears!)
-            with st.container(height=350, border=True):
-                grid_cols = st.columns(4)
-                for i in range(total_q):
-                    if i == q_idx: icon = "🔵"
-                    elif st.session_state.user_answers.get(i) is not None: icon = "🟢"
-                    elif i in st.session_state.visited_questions: icon = "🔴"
-                    else: icon = "⚪"
-                        
-                    with grid_cols[i % 4]:
-                        if st.button(f"{icon}\n{i+1}", key=f"pal_{i}"):
-                            st.session_state.current_q = i
-                            st.rerun()
-
-        # 👈 LEFT PANEL (Main Question)
-        with col_main:
-            st.markdown(f"<h3 style='color:#4F46E5; margin-top:0;'>{st.session_state.topic}</h3>", unsafe_allow_html=True)
-            st.write("---")
-            st.markdown(f"#### Q{q_idx + 1}. {q_data['q']}")
-            
-            saved_ans = st.session_state.user_answers.get(q_idx)
-            try: def_idx = q_data['options'].index(saved_ans)
-            except: def_idx = None
-            
-            clear_key = st.session_state.get(f"clear_{q_idx}", 0)
-            choice = st.radio("Select your option:", q_data['options'], index=def_idx, key=f"rad_{q_idx}_{clear_key}", label_visibility="collapsed")
-            if choice: st.session_state.user_answers[q_idx] = choice
-                
-            st.write("")
-            b_col1, b_col2, b_col3, b_col4 = st.columns(4)
-            with b_col1:
-                if st.button("⏪ Previous"):
-                    if q_idx > 0: st.session_state.current_q -= 1
-                    st.rerun()
-            with b_col2:
-                if st.button("🧹 Clear"):
-                    st.session_state.user_answers.pop(q_idx, None)
-                    st.session_state[f"clear_{q_idx}"] = clear_key + 1
-                    st.rerun()
-            with b_col3:
-                is_last = (q_idx == total_q - 1)
-                btn_txt = "Next ⏩" if not is_last else "Finish"
-                if st.button(btn_txt, type="primary"):
-                    if not is_last:
-                        st.session_state.current_q += 1
-                        st.rerun()
-            with b_col4:
-                if st.button("🚀 Final Submit", type="primary"):
-                    st.session_state.quiz_completed = True
-                    st.rerun()
