@@ -285,28 +285,61 @@ def inject_custom_css():
             color: #be123c !important;
         }}
 
-        /* Palette grid tweaks for better sizing */
-        .palette-button-container {{ margin-bottom: 8px; }}
+        /* =========================================
+           Testbook-Style Question Palette CSS
+           ========================================= */
+        .cbt-btn-wrapper {{ margin-bottom: 8px; }}
 
-        /* 1:1 Aspect Ratio Square Question Palette Buttons Fix */
-        .palette-button-container div.stButton > button {{
+        /* Shared Palette Button Properties */
+        .cbt-btn-wrapper div.stButton > button {{
             aspect-ratio: 1 / 1 !important;
             width: 100% !important;
             height: auto !important;
             padding: 0 !important;
             display: flex !important;
-            flex-direction: column !important;
             align-items: center !important;
             justify-content: center !important;
-            border-radius: 8px !important;
+            border-radius: 6px !important;
+            border: 1px solid #cbd5e1 !important;
+            transition: all 0.2s ease-in-out;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05) !important;
         }}
         
-        .palette-button-container div.stButton > button p {{
+        .cbt-btn-wrapper div.stButton > button p {{
             margin: 0 !important;
-            white-space: pre-wrap !important;
-            text-align: center !important;
-            line-height: 1.2 !important;
-            font-size: 14px !important;
+            font-size: 15px !important;
+            font-weight: 700 !important;
+            line-height: 1 !important;
+        }}
+
+        /* Not Visited (White Background, Dark Text) */
+        .cbt-not-visited div.stButton > button {{
+            background-color: #ffffff !important;
+            color: #334155 !important;
+        }}
+        .cbt-not-visited div.stButton > button p {{ color: #334155 !important; }}
+
+        /* Answered (Green Background, White Text) */
+        .cbt-answered div.stButton > button {{
+            background-color: #22c55e !important;
+            border-color: #16a34a !important;
+            color: #ffffff !important;
+        }}
+        .cbt-answered div.stButton > button p {{ color: #ffffff !important; }}
+
+        /* Not Answered / Visited (Red Background, White Text) */
+        .cbt-not-answered div.stButton > button {{
+            background-color: #ef4444 !important;
+            border-color: #dc2626 !important;
+            color: #ffffff !important;
+        }}
+        .cbt-not-answered div.stButton > button p {{ color: #ffffff !important; }}
+
+        /* Current Question Highlight (Thick Blue Border) */
+        .cbt-current div.stButton > button {{
+            border: 3px solid #2563eb !important;
+            transform: scale(1.08) !important;
+            box-shadow: 0 0 10px rgba(37, 99, 235, 0.3) !important;
         }}
         
         /* Mobile Responsiveness */
@@ -315,9 +348,9 @@ def inject_custom_css():
             h3 {{ font-size: 1.3rem !important; line-height: 1.4 !important; }}
             div.stButton > button {{ font-size: 14px !important; padding: 0.4rem !important; }}
             
-            /* Prevent buttons from becoming giant squares on mobile layout */
-            .palette-button-container div.stButton > button {{
-                max-width: 70px !important;
+            /* Prevent buttons from becoming giant squares on mobile */
+            .cbt-btn-wrapper div.stButton > button {{
+                max-width: 50px !important;
                 margin: 0 auto !important;
             }}
         }}
@@ -544,41 +577,81 @@ def render_exam():
     with col_pal:
         render_visual_timer()
         
-        st.markdown("<h4 style='text-align:center; margin-top:10px;'>Question Palette</h4>", unsafe_allow_html=True)
+        # Calculate Legend Counts
+        ans_count = len(st.session_state.user_answers)
+        visited_count = len(st.session_state.visited_questions)
+        not_ans_count = visited_count - ans_count
+        not_visit_count = total_q - visited_count
+        
+        # Testbook-style Profile & Legend
+        st.markdown(f"""
+        <div style='background-color: #f8fafc; padding: 12px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #e2e8f0;'>
+            <div style='display: flex; align-items: center; gap: 10px; margin-bottom: 12px;'>
+                <div style='width: 30px; height: 30px; background-color: #3b82f6; color: white; border-radius: 50%; display: flex; justify-content: center; align-items: center; font-weight: bold;'>
+                    👤
+                </div>
+                <span style='font-weight: 600; color: #1e293b;'>{st.session_state.current_user.split()[0]}</span>
+            </div>
+            
+            <div style='display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 8px;'>
+                <div style='display:flex; align-items:center; gap:5px; width:48%;'>
+                    <div style='min-width:20px; height:20px; background:#22c55e; color:white; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:bold;'>{ans_count}</div> 
+                    <span style='color:#475569;'>Answered</span>
+                </div>
+                <div style='display:flex; align-items:center; gap:5px; width:48%;'>
+                    <div style='min-width:20px; height:20px; background:#ef4444; color:white; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:bold;'>{not_ans_count}</div> 
+                    <span style='color:#475569;'>Not Answered</span>
+                </div>
+            </div>
+            <div style='display: flex; justify-content: flex-start; font-size: 11px;'>
+                <div style='display:flex; align-items:center; gap:5px;'>
+                    <div style='min-width:20px; height:20px; background:#ffffff; color:#334155; border:1px solid #cbd5e1; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:bold;'>{not_visit_count}</div> 
+                    <span style='color:#475569;'>Not Visited</span>
+                </div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # Testbook-style Section Header
         st.markdown(
-            "<p style='text-align:center; font-size:13px; font-weight:600; margin-bottom:15px; color:#475569;'>"
-            "🔵 Curr &nbsp;|&nbsp; 🟢 Ans &nbsp;|&nbsp; 🔴 Skip &nbsp;|&nbsp; ⚪ Unvisit"
-            "</p>", unsafe_allow_html=True
+            "<div style='background-color:#dbeafe; padding:8px 12px; font-weight:bold; color:#1e3a8a; border-radius:6px; margin-bottom:12px; font-size:13px;'>"
+            "SECTION : Questions"
+            "</div>", 
+            unsafe_allow_html=True
         )
         
-        # 1. Independent Scrollable Container Implementation
+        # Independent Scrollable Container for the Buttons
         try:
-            # Streamlit >= 1.30 (Removes default border for a cleaner look)
             palette_scroll = st.container(height=400, border=False)
         except TypeError:
             try:
-                # Streamlit >= 1.28 (Standard native scroll container)
                 palette_scroll = st.container(height=400)
             except TypeError:
-                # Fallback for very old versions
                 palette_scroll = st.container()
 
         # Flex Grid Palette inside the scroll container
         with palette_scroll:
             grid_cols = st.columns(5)
             for i in range(total_q):
-                if st.session_state.user_answers.get(i) is not None: 
-                    icon = "🟢"
-                elif i == q_idx: 
-                    icon = "🔵"
-                elif i in st.session_state.visited_questions: 
-                    icon = "🔴"
-                else: 
-                    icon = "⚪"
+                is_ans = st.session_state.user_answers.get(i) is not None
+                is_vis = i in st.session_state.visited_questions
+                is_curr = (i == q_idx)
+                
+                # Determine class based on state (no emojis used)
+                wrapper_class = "cbt-btn-wrapper"
+                if is_ans:
+                    wrapper_class += " cbt-answered"
+                elif is_vis:
+                    wrapper_class += " cbt-not-answered"
+                else:
+                    wrapper_class += " cbt-not-visited"
+                    
+                if is_curr:
+                    wrapper_class += " cbt-current"
                     
                 with grid_cols[i % 5]:
-                    st.markdown("<div class='palette-button-container'>", unsafe_allow_html=True)
-                    st.button(f"{icon}\n{i+1}", key=f"pal_{i}", on_click=nav_goto, args=(i,))
+                    st.markdown(f"<div class='{wrapper_class}'>", unsafe_allow_html=True)
+                    st.button(f"{i+1}", key=f"pal_{i}", on_click=nav_goto, args=(i,))
                     st.markdown("</div>", unsafe_allow_html=True)
 
     # ================== LEFT PANEL (Main Question Area) ==================
