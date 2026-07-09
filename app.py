@@ -145,24 +145,8 @@ def save_timers_data(data):
 # ==========================================
 def init_session():
     """Initialize all session state variables safely with refresh persistence support."""
-    # --- PERSISTENT REFRESH LOGIC ---
-    query_params = st.query_params
-    sid = query_params.get("sid", None)
-    
-    # If session ID exists in URL but memory is cleared (e.g. F5 refresh happened)
-    if sid and not st.session_state.get('auth', False):
-        session_path = os.path.join(SESSION_FOLDER, f"{sid}.pkl")
-        if os.path.exists(session_path):
-            try:
-                with open(session_path, "rb") as f:
-                    saved_state = pickle.load(f)
-                for k, v in saved_state.items():
-                    st.session_state[k] = v
-                return  # State fully restored!
-            except Exception:
-                pass  # Fallback to defaults if file is somehow corrupted
-                
-    # --- DEFAULT INITIALIZATION ---
+    # --- DEFAULT INITIALIZATION DICTIONARY ---
+    # Moved up so we can use it to filter safe variables during load
     default_state = {
         'auth': False, 
         'current_user': "", 
@@ -185,6 +169,27 @@ def init_session():
         'admin_current_path': "",
         'sid': "" # Track current persistent session ID
     }
+
+    # --- PERSISTENT REFRESH LOGIC ---
+    query_params = st.query_params
+    sid = query_params.get("sid", None)
+    
+    # If session ID exists in URL but memory is cleared (e.g. F5 refresh happened)
+    if sid and not st.session_state.get('auth', False):
+        session_path = os.path.join(SESSION_FOLDER, f"{sid}.pkl")
+        if os.path.exists(session_path):
+            try:
+                with open(session_path, "rb") as f:
+                    saved_state = pickle.load(f)
+                for k, v in saved_state.items():
+                    # FILTER: Only restore variables that belong to our default state (ignores widget keys)
+                    if k in default_state:
+                        st.session_state[k] = v
+                return  # State fully restored!
+            except Exception:
+                pass  # Fallback to defaults if file is somehow corrupted
+                
+    # --- DEFAULT INITIALIZATION ---
     for key, value in default_state.items():
         if key not in st.session_state:
             st.session_state[key] = value
@@ -1201,7 +1206,19 @@ def main():
     if st.session_state.get("auth") and st.session_state.get("sid"):
         try:
             session_path = os.path.join(SESSION_FOLDER, f"{st.session_state.sid}.pkl")
-            safe_state = {k: v for k, v in st.session_state.items()}
+            
+            # Whitelist of safe keys to persist (Matches default_state in init_session)
+            safe_keys = [
+                'auth', 'current_user', 'questions', 'current_q', 'user_answers', 
+                'visited_questions', 'marked_questions', 'quiz_ready', 'topic', 
+                'timer_mode', 'time_val', 'remaining_seconds', 'last_calc_time', 
+                'last_interaction_time', 'active_page', 'is_paused', 
+                'current_test_filename', 'attempt_recorded', 'admin_current_path', 'sid'
+            ]
+            
+            # Only save the safe keys, ignoring all UI widgets
+            safe_state = {k: st.session_state[k] for k in safe_keys if k in st.session_state}
+            
             with open(session_path, "wb") as f:
                 pickle.dump(safe_state, f)
         except Exception:
