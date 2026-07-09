@@ -33,7 +33,7 @@ def add_bg_from_local(image_file):
 
 add_bg_from_local('bg.jpg') 
 
-# 🛠️ BASE CSS (Top Menu & Sidebar Toggle Button Fix Included)
+# 🛠️ BASE CSS (Top Menu Buttons 100% Clear Fix Included)
 st.markdown("""
     <style>
     .block-container { 
@@ -47,15 +47,19 @@ st.markdown("""
     }
     header[data-testid="stHeader"] { background-color: transparent !important; }
     
-    /* 🎯 FIX FOR TOP CORNERS (Settings & Sidebar Toggle) */
+    /* 🎯 100% CLEAR FIX FOR TOP CORNERS (Settings & Sidebar Toggle) */
     header[data-testid="stHeader"] button, [data-testid="collapsedControl"] {
-        background-color: rgba(255, 255, 255, 0.7) !important;
+        background-color: #ffffff !important; /* Pure Solid White */
         border-radius: 50% !important;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.1) !important;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.4) !important; /* Gehra Shadow */
+        border: 1px solid #cbd5e1 !important; /* Halki outline */
+        opacity: 1 !important; /* Transparency hata di */
     }
-    header[data-testid="stHeader"] svg, [data-testid="collapsedControl"] svg {
+    header[data-testid="stHeader"] svg, [data-testid="collapsedControl"] svg,
+    header[data-testid="stHeader"] svg path, [data-testid="collapsedControl"] svg path {
         fill: #000000 !important;
         color: #000000 !important;
+        stroke: #000000 !important; /* Deep black icons */
     }
     
     /* Force text to be dark inside the main white container */
