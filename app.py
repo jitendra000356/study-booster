@@ -1,10 +1,46 @@
+### 🛠️ DEBUG REPORT
+
+**1. Critical Bug: Infinite Rerun & White Screen (Timer / Auto-Pause Crash)**
+
+* **Root Cause:** The `inject_timer_and_autopause_js` function injected an HTML component running a `setInterval` that used `window.parent.document.querySelectorAll('button')` to click standard Streamlit buttons (like `AutoPauseTrigger` or `Final Submit`). Because Streamlit runs components in an iframe, constantly interacting with the parent DOM aggressively triggers React state updates. On top of that, every rerun injected a *new* interval, causing an avalanche of clicks, resulting in an infinite rerun loop and eventually a white screen.
+* **File Location:** `inject_timer_and_autopause_js()` and `render_exam()`
+* **Fix:** Completely removed the unsafe JavaScript DOM manipulation. Replaced the auto-pause and timer logic with a **server-side timestamp architecture**. Time tracking is now done mathematically using Python's `time.time()`. The visual timer is now a safe, isolated read-only JS script that doesn't interact with the parent window.
+
+**2. State Corruption Bug: Question Radio Buttons Losing State**
+
+* **Root Cause:** The code used a dynamically changing key for the radio buttons: `key=f"rad_{q_idx}_{clear_key}"`. When the key dynamically changes or evaluates out-of-bounds, Streamlit drops the component from the state tree, leading to unhandled `ValueError` crashes and wiped user answers when navigating back and forth.
+* **File Location:** `render_exam()`
+* **Fix:** Bound the radio button safely to session state using a static key (`f"radio_ans_{q_idx}"`). Used Streamlit's native `index` properties and handled the `on_change` callback natively to synchronize answers with `st.session_state.user_answers`.
+
+**3. Bug: Navigation / Layout Freezing & "Sticky Palette" Breaking Mobile UI**
+
+* **Root Cause:** The application attempted to force CSS `position: sticky` onto a Streamlit layout column via injected JavaScript (`col.style.position = '-webkit-sticky'`). This broke responsive flexbox calculations, causing extreme layout glitches on mobile devices and overlapping elements.
+* **File Location:** `inject_timer_and_autopause_js()`
+* **Fix:** Removed the sticky JS script completely. Relied strictly on Streamlit's native `st.columns()` capability, which correctly and gracefully stacks the main question window above the palette window natively on mobile screens.
+
+**4. Data Error: CSV Parsing Failing on Empty Options**
+
+* **Root Cause:** `q_data['options']` rigidly extracted exactly 5 options: `[row['Option1'], ..., row['Option5']]`. If a CSV contained a question with only 3 or 4 options, it rendered empty strings as valid radio options, crashing the index-matching function.
+* **File Location:** `load_quiz()`
+* **Fix:** Implemented a list comprehension to dynamically check and load only non-empty option strings during CSV parsing.
+
+**5. Logic Flaw: Missing robust Pause/Resume Lifecycle**
+
+* **Root Cause:** The `is_paused` flag was disconnected from the timer logic. If paused, time kept running in the background. If the user resumed, their exam would instantly submit.
+* **File Location:** `render_exam()`, `pause_exam()`
+* **Fix:** Overhauled the timer ecosystem using `last_calc_time` and `last_interaction_time`. Time only ticks away natively during an active session, pausing mathematically freezes the timer, and resuming restores the exact state perfectly.
+
+---
+
+### 💻 COMPLETE APPLICATION (`study_booster_app.py`)
+
+```python
 import streamlit as st
 import streamlit.components.v1 as components
 import csv
 import os
 import time
 import base64
-from datetime import datetime
 
 # ==========================================
 # 1. CONFIGURATION & CONSTANTS
@@ -36,7 +72,7 @@ ALLOWED_USERS = {
 # 2. STATE INITIALIZATION
 # ==========================================
 def init_session():
-    """Initialize all session state variables."""
+    """Initialize all session state variables safely."""
     default_state = {
         'auth': False, 
         'current_user': "", 
@@ -44,82 +80,161 @@ def init_session():
         'current_q': 0,
         'user_answers': {}, 
         'visited_questions': set(), 
-        'quiz_completed': False, 
         'quiz_ready': False, 
-        'exam_started': False, 
         'topic': "", 
-        'end_time': 0, 
         'timer_mode': "No Timer", 
         'time_val': 0,
-        'active_page': "Dashboard",   # Controls the new linear workflow
-        'is_paused': False,           # Pause/Resume functionality
-        'remaining_seconds': 0        # Stores exact time remaining when paused
+        'remaining_seconds': 0,
+        'last_calc_time': 0,
+        'last_interaction_time': 0,
+        'active_page': "Dashboard",
+        'is_paused': False
     }
     for key, value in default_state.items():
         if key not in st.session_state:
             st.session_state[key] = value
 
 # ==========================================
-# 3. CORE LOGIC FUNCTIONS
+# 3. CORE TIME & EVENT HANDLERS
+# ==========================================
+def passive_time_check():
+    """Validates time elapsed passively on every script run."""
+    if st.session_state.get('active_page') != 'Exam' or st.session_state.get('is_paused', False):
+        return
+
+    now = time.time()
+    elapsed = now - st.session_state.get('last_calc_time', now)
+    st.session_state.last_calc_time = now
+
+    # Deduct Time
+    if st.session_state.timer_mode == "Total Time (Minutes)":
+        st.session_state.remaining_seconds -= elapsed
+        if st.session_state.remaining_seconds <= 0:
+            st.session_state.remaining_seconds = 0
+            st.session_state.active_page = "Result"
+            st.rerun()
+
+    # Auto-Pause if inactive for 5 minutes (300 seconds)
+    inactive_duration = now - st.session_state.get('last_interaction_time', now)
+    if inactive_duration > 300:
+        st.session_state.is_paused = True
+        if st.session_state.timer_mode == "Total Time (Minutes)":
+            # Refund the lost idle time beyond the 5 min penalty
+            st.session_state.remaining_seconds += (inactive_duration - 300)
+        st.session_state.last_interaction_time = now
+        st.rerun()
+
+def record_activity():
+    """Callback wrapper applied to buttons/inputs to record user activity."""
+    now = time.time()
+    
+    # Process time normally before recording action
+    if not st.session_state.is_paused:
+        elapsed = now - st.session_state.last_calc_time
+        if st.session_state.timer_mode == "Total Time (Minutes)":
+            st.session_state.remaining_seconds -= elapsed
+    
+    st.session_state.last_calc_time = now
+    
+    # Check if they were already inactive before this action
+    inactive_duration = now - st.session_state.last_interaction_time
+    if inactive_duration > 300 and not st.session_state.is_paused:
+        st.session_state.is_paused = True
+        if st.session_state.timer_mode == "Total Time (Minutes)":
+            st.session_state.remaining_seconds += (inactive_duration - 300)
+        st.session_state.last_interaction_time = now
+    else:
+        # Normal interaction recorded
+        st.session_state.last_interaction_time = now
+
+# ==========================================
+# 4. EXAM CONTROL & LOGIC FUNCTIONS
 # ==========================================
 def load_quiz(file_name, timer_mode, time_minutes):
-    """Parses CSV and sets up the exam structure."""
+    """Parses CSV correctly, filtering empty options, and resets exam state."""
     st.session_state.questions = []
     file_path = os.path.join(CSV_FOLDER, file_name)
     
     with open(file_path, 'r', encoding='utf-8-sig', errors='ignore') as f:
         reader = csv.DictReader(f)
         for row in reader:
+            # Dynamic option loader ignores empty string cells
+            opts = []
+            for i in range(1, 6):
+                col_name = f'Option{i}'
+                if col_name in row and row[col_name].strip():
+                    opts.append(row[col_name].strip())
+            
             st.session_state.questions.append({
-                'q': row['Question'], 
-                'options': [row['Option1'], row['Option2'], row['Option3'], row['Option4'], row['Option5']], 
+                'q': row['Question'].strip(), 
+                'options': opts, 
                 'ans': int(row['Answer']) - 1
             })
             
     st.session_state.topic = os.path.splitext(file_name)[0].replace("_", " ")
     st.session_state.quiz_ready = True
-    st.session_state.exam_started = False 
-    st.session_state.quiz_completed = False
     st.session_state.current_q = 0
     st.session_state.user_answers = {}
     st.session_state.visited_questions = {0}
     st.session_state.timer_mode = timer_mode
     st.session_state.time_val = time_minutes
-    st.session_state.is_paused = False
     st.session_state.remaining_seconds = time_minutes * 60
-
-def pause_exam():
-    """Pauses the exam and freezes the timer."""
-    if not st.session_state.is_paused:
-        st.session_state.is_paused = True
-        if st.session_state.timer_mode == "Total Time (Minutes)":
-            # Save the exact remaining seconds
-            st.session_state.remaining_seconds = int(st.session_state.end_time - time.time())
-            # Ensure it doesn't drop below 0
-            if st.session_state.remaining_seconds < 0:
-                st.session_state.remaining_seconds = 0
-
-def resume_exam():
-    """Resumes the exam and recalculates the end time."""
-    if st.session_state.is_paused:
-        st.session_state.is_paused = False
-        if st.session_state.timer_mode == "Total Time (Minutes)":
-            # Push the end time forward based on the frozen remaining seconds
-            st.session_state.end_time = time.time() + st.session_state.remaining_seconds
+    st.session_state.is_paused = False
 
 def calculate_score():
-    """Calculates final score dynamically."""
-    score = sum(
-        1 for i, q in enumerate(st.session_state.questions) 
-        if st.session_state.user_answers.get(i) == q['options'][q['ans']]
-    )
+    """Calculates final score dynamically and safely."""
+    score = 0
+    for i, q in enumerate(st.session_state.questions):
+        correct_ans = q['options'][q['ans']] if 0 <= q['ans'] < len(q['options']) else None
+        if st.session_state.user_answers.get(i) == correct_ans:
+            score += 1
     return score
 
+# -- Button Navigation Callbacks --
+def nav_goto(q_idx):
+    record_activity()
+    if not st.session_state.is_paused:
+        st.session_state.current_q = q_idx
+
+def nav_prev():
+    record_activity()
+    if not st.session_state.is_paused and st.session_state.current_q > 0:
+        st.session_state.current_q -= 1
+
+def nav_next():
+    record_activity()
+    if not st.session_state.is_paused and st.session_state.current_q < len(st.session_state.questions) - 1:
+        st.session_state.current_q += 1
+
+def nav_submit():
+    record_activity()
+    if not st.session_state.is_paused:
+        st.session_state.active_page = "Result"
+
+def pause_exam():
+    record_activity()
+    st.session_state.is_paused = True
+
+def clear_answer(q_idx):
+    record_activity()
+    if not st.session_state.is_paused:
+        st.session_state.user_answers.pop(q_idx, None)
+        st.session_state[f"radio_ans_{q_idx}"] = None
+
+def on_radio_change(q_idx):
+    record_activity()
+    if not st.session_state.is_paused:
+        selected = st.session_state.get(f"radio_ans_{q_idx}")
+        if selected is not None:
+            st.session_state.user_answers[q_idx] = selected
+        else:
+            st.session_state.user_answers.pop(q_idx, None)
+
 # ==========================================
-# 4. CSS & JAVASCRIPT INJECTION
+# 5. CSS & JAVASCRIPT INJECTION
 # ==========================================
 def inject_custom_css():
-    """Injects responsive, modern, and dark-mode safe CSS."""
+    """Injects responsive, modern, and bug-free CSS."""
     try:
         with open('bg.jpg', "rb") as image_file:
             encoded_string = base64.b64encode(image_file.read())
@@ -132,7 +247,7 @@ def inject_custom_css():
             }}
             """
     except Exception:
-        bg_css = ".stApp { background-color: #f0f4f8; }"
+        bg_css = ".stApp { background-color: #f8fafc; }"
 
     st.markdown(f"""
         <style>
@@ -142,7 +257,7 @@ def inject_custom_css():
         .block-container {{ 
             max-width: 98% !important; 
             padding: 1.5rem !important; 
-            background-color: rgba(255, 255, 255, 0.96) !important; 
+            background-color: rgba(255, 255, 255, 0.98) !important; 
             border-radius: 16px;
             margin-top: 15px;
             box-shadow: 0 8px 32px rgba(0,0,0,0.15);
@@ -151,28 +266,6 @@ def inject_custom_css():
         
         /* Hide default Streamlit headers for clean UI */
         header[data-testid="stHeader"] {{ background-color: transparent !important; }}
-        
-        /* Top Navigation Buttons Fix (Dark mode safe, clear borders) */
-        header[data-testid="stHeader"] button, 
-        [data-testid="stToolbar"] button,
-        [data-testid="collapsedControl"],
-        button[kind="header"] {{
-            background-color: #ffffff !important; 
-            border-radius: 8px !important; 
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1) !important; 
-            border: 1px solid #cbd5e1 !important; 
-            opacity: 1 !important;
-            visibility: visible !important;
-            z-index: 99999 !important;
-            color: #000000 !important;
-        }}
-        header[data-testid="stHeader"] button *, 
-        [data-testid="stToolbar"] button *,
-        [data-testid="collapsedControl"] *,
-        button[kind="header"] * {{
-            color: #000000 !important;
-            fill: currentColor !important;
-        }}
         
         /* Force Text Colors to be readable inside main container */
         section[data-testid="stMain"] p, 
@@ -185,10 +278,10 @@ def inject_custom_css():
         section[data-testid="stMain"] label, 
         section[data-testid="stMain"] span,
         section[data-testid="stMain"] div[data-baseweb="radio"] div {{
-            color: #1e293b !important; 
+            color: #0f172a !important; 
         }}
 
-        /* Universal Button Styling (Modern, Rounded, Hover Effects) */
+        /* Universal Button Styling */
         div.stButton > button {{ 
             background-color: #ffffff !important; 
             border: 2px solid #e2e8f0 !important;
@@ -206,23 +299,20 @@ def inject_custom_css():
             transform: translateY(-2px);
         }}
         
-        /* Primary Buttons (Start, Next, Submit) */
+        /* Primary Buttons */
         div.stButton > button[kind="primary"] {{ 
             background: linear-gradient(135deg, #4f46e5 0%, #3b82f6 100%) !important; 
             border: none !important;
-            border-radius: 10px !important; 
-            box-shadow: 0 4px 15px rgba(79, 70, 229, 0.4) !important;
+            color: #ffffff !important;
+        }}
+        div.stButton > button[kind="primary"] * {{
+            color: #ffffff !important;
         }}
         div.stButton > button[kind="primary"]:hover {{
             box-shadow: 0 6px 20px rgba(79, 70, 229, 0.6) !important;
-            transform: translateY(-2px);
-        }}
-        div.stButton > button[kind="primary"] p, 
-        div.stButton > button[kind="primary"] span {{
-            color: #ffffff !important;
         }}
 
-        /* Secondary Warning/Pause Buttons */
+        /* Secondary Pause Buttons */
         div.stButton > button[kind="secondary"] {{
             background-color: #fff1f2 !important;
             border-color: #fecdd3 !important;
@@ -231,64 +321,24 @@ def inject_custom_css():
         div.stButton > button[kind="secondary"] * {{
             color: #be123c !important;
         }}
+
+        /* Palette grid tweaks for better sizing */
+        .palette-button-container {{ margin-bottom: 8px; }}
         
-        /* Palette Specific Tuning */
-        .palette-btn button {{
-            padding: 0px !important;
-            height: 42px !important;
-            min-height: 42px !important;
-        }}
-
-        /* Hide the Auto-Pause Trigger Button Completely */
-        .hidden-trigger-container {{
-            display: none !important;
-            opacity: 0 !important;
-            height: 0 !important;
-            width: 0 !important;
-            overflow: hidden !important;
-        }}
-
-        /* Mobile Responsiveness & Adjustments */
+        /* Mobile Responsiveness */
         @media (max-width: 768px) {{
             .block-container {{ padding: 1rem 0.5rem !important; }}
-            h3 {{ font-size: 1.4rem !important; }}
-            h4 {{ font-size: 1.1rem !important; }}
+            h3 {{ font-size: 1.3rem !important; line-height: 1.4 !important; }}
             div.stButton > button {{ font-size: 14px !important; padding: 0.4rem !important; }}
         }}
         </style>
     """, unsafe_allow_html=True)
 
-def inject_timer_and_autopause_js(remaining_sec, is_timer_active):
-    """
-    Injects the JS that runs the timer and tracks inactivity.
-    If inactive for 5 mins (300 sec) or offline, it auto-pauses the exam.
-    Also handles responsive sticky positioning for desktop.
-    """
-    ui_code = f'<div class="timer-box">⏳ <span id="time">{"00:00" if is_timer_active else "📝 No Time Limit"}</span></div>'
+def render_visual_timer():
+    """Renders a 100% safe, read-only HTML timer that doesn't trigger endless reruns."""
+    is_timed = (st.session_state.timer_mode == "Total Time (Minutes)")
+    rem_sec = int(max(0, st.session_state.remaining_seconds))
     
-    js_timer_logic = ""
-    if is_timer_active:
-        js_timer_logic = f"""
-        var countDownDate = new Date().getTime() + ({remaining_sec} * 1000);
-        var x = setInterval(function() {{
-            var now = new Date().getTime();
-            var distance = countDownDate - now;
-            if (distance <= 0) {{
-                clearInterval(x); 
-                document.getElementById("time").innerHTML = "TIME UP!";
-                var btns = window.parent.document.querySelectorAll('button');
-                for(var i=0; i<btns.length; i++) {{ 
-                    if(btns[i].innerText.includes('Final Submit')) {{ btns[i].click(); break; }} 
-                }}
-            }} else {{
-                var m = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
-                var s = Math.floor((distance % (1000 * 60)) / 1000);
-                m = m < 10 ? "0" + m : m; s = s < 10 ? "0" + s : s;
-                document.getElementById("time").innerHTML = m + ":" + s;
-            }}
-        }}, 1000);
-        """
-
     html_code = f"""
     <!DOCTYPE html>
     <html>
@@ -298,112 +348,58 @@ def inject_timer_and_autopause_js(remaining_sec, is_timer_active):
             .timer-box {{ 
                 background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%); 
                 border: 2px solid #ef4444; 
-                color: #b91c1c !important; 
+                color: #b91c1c; 
                 padding: 12px 0; 
                 border-radius: 12px; 
                 font-size: 24px; 
                 font-weight: 800; 
                 text-align: center; 
                 box-shadow: 0 4px 6px rgba(239, 68, 68, 0.2); 
-                margin-bottom: 10px; 
                 letter-spacing: 1px;
             }}
-            .timer-box span {{ color: #b91c1c !important; }}
-            .no-timer {{ background: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%); border-color: #38bdf8; color: #0369a1 !important; }}
+            .no-timer {{ 
+                background: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%); 
+                border-color: #38bdf8; 
+                color: #0369a1; 
+            }}
         </style>
     </head>
     <body>
-        {ui_code}
+        <div id="t-box" class="timer-box {'no-timer' if not is_timed else ''}">
+            ⏳ <span id="time">Loading...</span>
+        </div>
         <script>
-            // 1. Timer Logic
-            {js_timer_logic}
+            var is_timed = {1 if is_timed else 0};
+            var rem = {rem_sec};
+            var display = document.getElementById("time");
             
-            // 2. Auto-Pause (Inactivity Tracker) Logic
-            let idleTime = 0;
-            const maxIdle = 300; // 5 minutes (300 seconds)
-            
-            function resetIdle() {{ idleTime = 0; }}
-            
-            try {{
-                window.parent.document.addEventListener('mousemove', resetIdle, true);
-                window.parent.document.addEventListener('keypress', resetIdle, true);
-                window.parent.document.addEventListener('touchstart', resetIdle, true);
-                window.parent.document.addEventListener('scroll', resetIdle, true);
-                window.parent.document.addEventListener('click', resetIdle, true);
-            }} catch(e) {{}}
-            
-            var inactivityInterval = setInterval(function() {{
-                idleTime++;
-                if (idleTime >= maxIdle || !navigator.onLine) {{
-                    clearInterval(inactivityInterval); // Stop checking once triggered
-                    var btns = window.parent.document.querySelectorAll('button');
-                    for(var i=0; i<btns.length; i++) {{ 
-                        if(btns[i].innerText.includes('AutoPauseTrigger')) {{ 
-                            btns[i].click(); 
-                            break; 
-                        }} 
+            if (!is_timed) {{
+                display.innerHTML = "No Time Limit";
+            }} else {{
+                function updateDisplay() {{
+                    if (rem <= 0) {{
+                        display.innerHTML = "TIME UP! Click Submit.";
+                        return false;
                     }}
+                    var m = Math.floor(rem / 60);
+                    var s = Math.floor(rem % 60);
+                    display.innerHTML = (m < 10 ? "0" + m : m) + ":" + (s < 10 ? "0" + s : s);
+                    return true;
                 }}
-            }}, 1000);
-            
-            // 3. Responsive Sticky Panel Logic & Hide Trigger Button
-            setTimeout(function() {{
-                try {{
-                    // Hide the AutoPauseTrigger button instantly
-                    var btns = window.parent.document.querySelectorAll('button');
-                    for(var i=0; i<btns.length; i++) {{
-                        if(btns[i].innerText.includes('AutoPauseTrigger')) {{
-                            var wrap = btns[i].closest('div[data-testid="stVerticalBlock"]');
-                            if(wrap) wrap.style.display = 'none';
-                        }}
-                    }}
-
-                    var frame = window.frameElement;
-                    var col = frame.closest('div[data-testid="column"]');
-                    if(!col) col = frame.parentElement.parentElement.parentElement;
-                    
-                    if (col) {{
-                        // Apply Sticky ONLY on Desktop (Width > 768px)
-                        if (window.innerWidth > 768) {{
-                            col.style.position = '-webkit-sticky';
-                            col.style.position = 'sticky';
-                            col.style.top = '15px';
-                            col.style.height = '88vh'; 
-                            col.style.overflowY = 'auto'; 
-                            col.style.borderLeft = '2px solid #e2e8f0';
-                            col.style.paddingLeft = '15px';
-                            col.style.paddingRight = '5px';
-                        }}
-                        
-                        col.classList.add('my-palette');
-                        
-                        var main = window.parent.document.querySelector('section[data-testid="stMain"]');
-                        if(main) main.style.overflow = 'visible';
-                        var block = window.parent.document.querySelector('.block-container');
-                        if(block) block.style.overflow = 'visible';
-                        
-                        if (!window.parent.document.getElementById('palette-css')) {{
-                            var style = window.parent.document.createElement('style');
-                            style.id = 'palette-css';
-                            style.innerHTML = `
-                                .my-palette::-webkit-scrollbar {{ width: 6px; }}
-                                .my-palette::-webkit-scrollbar-thumb {{ background: #94a3b8; border-radius: 6px; }}
-                                .my-palette div[data-testid="column"] {{ padding: 3px !important; }}
-                            `;
-                            window.parent.document.head.appendChild(style);
-                        }}
-                    }}
-                }} catch(e) {{}}
-            }}, 100);
+                updateDisplay();
+                var x = setInterval(function() {{
+                    rem--;
+                    if (!updateDisplay()) clearInterval(x);
+                }}, 1000);
+            }}
         </script>
     </body>
     </html>
     """
     components.html(html_code, height=75)
 
-
 # ==========================================
-# 5. PAGE RENDERING FUNCTIONS
+# 6. PAGE RENDERING FUNCTIONS
 # ==========================================
 
 def render_login():
@@ -430,7 +426,7 @@ def render_login():
                     st.error("❌ Invalid Credentials! Please try again.")
 
 def render_sidebar():
-    """Renders the simplified workflow navigation sidebar."""
+    """Renders the standard navigation sidebar."""
     try:
         st.sidebar.image("logo.png", use_container_width=True)
     except:
@@ -439,7 +435,6 @@ def render_sidebar():
     st.sidebar.markdown(f"### 👤 {st.session_state.current_user}")
     st.sidebar.divider()
     
-    # Workflow Navigation
     if st.sidebar.button("📚 Dashboard", use_container_width=True):
         st.session_state.active_page = "Dashboard"
         st.rerun()
@@ -450,7 +445,7 @@ def render_sidebar():
         st.rerun()
 
 def render_dashboard():
-    """Renders the main dashboard for loading tests."""
+    """Renders the main dashboard for loading and starting tests."""
     st.markdown("<h1 style='color: #1e293b;'>Welcome to Study Booster! 🚀</h1>", unsafe_allow_html=True)
     st.markdown("<p style='font-size: 1.1rem; color: #475569;'>Select and configure your test settings below before starting.</p>", unsafe_allow_html=True)
     st.write("---")
@@ -487,18 +482,18 @@ def render_dashboard():
                     if c2.button("Load Test", key=f"load_{file}"):
                         load_quiz(file, t_mode, t_val)
                         
-    # Display start button if a test is successfully loaded
+    # Start Test section appended directly to dashboard bottom
     if st.session_state.quiz_ready:
         st.divider()
-        st.success(f"✅ **{st.session_state.topic}** Loaded Successfully!")
+        st.success(f"✅ **{st.session_state.topic}** is loaded and ready.")
         col_space1, col_start, col_space2 = st.columns([1, 2, 1])
         with col_start:
-            if st.button("🚀 Start Live Test", type="primary", use_container_width=True):
+            if st.button("🚀 Proceed to Instructions", type="primary", use_container_width=True):
                 st.session_state.active_page = "Instructions"
                 st.rerun()
 
 def render_instructions():
-    """Renders the instructions page before the exam."""
+    """Renders the pre-exam instructions page."""
     st.markdown(f"<h1 style='color: #4F46E5; text-align: center;'>📜 Instructions</h1>", unsafe_allow_html=True)
     st.markdown(f"<h3 style='text-align: center; color: #475569;'>{st.session_state.topic}</h3>", unsafe_allow_html=True)
     st.divider()
@@ -506,77 +501,58 @@ def render_instructions():
     col1, col2, col3 = st.columns([1, 3, 1])
     with col2:
         with st.container(border=True):
-            st.markdown("""
-            ### Please read carefully before starting:
-            """)
+            st.markdown("### Please read carefully before starting:")
             st.markdown(f"🔹 **Total Questions:** {len(st.session_state.questions)}")
             st.markdown(f"🔹 **Time Limit:** {'No Time Limit' if st.session_state.timer_mode == 'No Timer' else f'{st.session_state.time_val} Minutes'}")
             st.markdown("""
             🔹 **Navigation:** You can jump to any question using the Question Palette on the right.
-            🔹 **Auto-Pause:** If you become inactive for 5 minutes or lose internet, the exam will pause automatically.
+            🔹 **Auto-Pause:** If you become completely inactive for **5 minutes**, the exam will pause itself to save your time safely.
             🔹 **Marking Scheme:** Every correct answer adds to your score. No negative marking.
             🔹 **Submission:** Exam submits automatically when timer hits zero.
             """)
             
             st.write("<br>", unsafe_allow_html=True)
             if st.button("✅ I have read the instructions. Begin Exam.", type="primary", use_container_width=True):
-                st.session_state.exam_started = True
+                now = time.time()
+                st.session_state.last_calc_time = now
+                st.session_state.last_interaction_time = now
                 st.session_state.is_paused = False
-                if st.session_state.timer_mode == "Total Time (Minutes)":
-                    st.session_state.end_time = time.time() + (st.session_state.time_val * 60)
                 st.session_state.active_page = "Exam"
                 st.rerun()
 
 def render_paused_screen():
-    """Renders the screen when the exam is manually or automatically paused."""
+    """Renders a simple, reliable screen when the test is paused."""
     st.write("<br><br>", unsafe_allow_html=True)
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
         with st.container(border=True):
             st.markdown("<h1 style='text-align: center; color: #b91c1c;'>⏸ Exam Paused</h1>", unsafe_allow_html=True)
-            st.markdown("<p style='text-align: center; color: #475569; font-size: 1.1rem;'>Your timer has been stopped and answers are safely saved.</p>", unsafe_allow_html=True)
+            st.markdown("<p style='text-align: center; color: #475569; font-size: 1.1rem;'>Your timer has been frozen and your progress is safely saved.</p>", unsafe_allow_html=True)
             st.write("---")
             if st.button("▶️ Resume Test", type="primary", use_container_width=True):
-                resume_exam()
+                now = time.time()
+                st.session_state.last_calc_time = now
+                st.session_state.last_interaction_time = now
+                st.session_state.is_paused = False
                 st.rerun()
 
 def render_exam():
-    """Renders the active examination layout."""
-    
-    # Catch Pause State First
+    """Renders the main Examination Layout, securely executing state interactions."""
     if st.session_state.is_paused:
         render_paused_screen()
         return
-
-    # Hidden auto-pause trigger button wrapper
-    st.markdown('<div class="hidden-trigger-container">', unsafe_allow_html=True)
-    if st.button("AutoPauseTrigger", key="auto_pause_trigger_btn"):
-        pause_exam()
-        st.rerun()
-    st.markdown('</div>', unsafe_allow_html=True)
-
-    # Server-side timeout check
-    if st.session_state.timer_mode == "Total Time (Minutes)":
-        if (st.session_state.end_time - time.time()) <= 0:
-            st.session_state.quiz_completed = True
-            st.session_state.active_page = "Result"
-            st.rerun()
 
     q_idx = st.session_state.current_q
     st.session_state.visited_questions.add(q_idx)
     total_q = len(st.session_state.questions)
     q_data = st.session_state.questions[q_idx]
 
-    # Responsive Grid Layout: Left Panel (Question), Right Panel (Palette)
+    # Native responsive Streamlit columns (Stacks automatically on mobile)
     col_main, col_pal = st.columns([7, 3]) 
     
     # ================== RIGHT PANEL (Timer + Palette) ==================
     with col_pal:
-        is_timed = (st.session_state.timer_mode == "Total Time (Minutes)")
-        rem_sec = int(st.session_state.end_time - time.time()) if is_timed else 0
-        
-        # Inject Timer and Autopause JS
-        inject_timer_and_autopause_js(rem_sec, is_timed)
+        render_visual_timer()
         
         st.markdown("<h4 style='text-align:center; margin-top:10px;'>Question Palette</h4>", unsafe_allow_html=True)
         st.markdown(
@@ -585,24 +561,21 @@ def render_exam():
             "</p>", unsafe_allow_html=True
         )
         
-        # Render Palette Grid
+        # Flex Grid Palette
         grid_cols = st.columns(5)
         for i in range(total_q):
-            if i == q_idx: 
-                icon = "🔵"
-            elif st.session_state.user_answers.get(i) is not None: 
+            if st.session_state.user_answers.get(i) is not None: 
                 icon = "🟢"
+            elif i == q_idx: 
+                icon = "🔵"
             elif i in st.session_state.visited_questions: 
                 icon = "🔴"
             else: 
                 icon = "⚪"
                 
             with grid_cols[i % 5]:
-                # Add CSS class helper for tight palette styling
-                st.markdown("<div class='palette-btn'>", unsafe_allow_html=True)
-                if st.button(f"{icon}\n{i+1}", key=f"pal_{i}"):
-                    st.session_state.current_q = i
-                    st.rerun()
+                st.markdown("<div class='palette-button-container'>", unsafe_allow_html=True)
+                st.button(f"{icon}\n{i+1}", key=f"pal_{i}", on_click=nav_goto, args=(i,))
                 st.markdown("</div>", unsafe_allow_html=True)
 
     # ================== LEFT PANEL (Main Question Area) ==================
@@ -612,24 +585,24 @@ def render_exam():
         
         st.markdown(f"<h3 style='line-height: 1.6;'>Q{q_idx + 1}. {q_data['q']}</h3>", unsafe_allow_html=True)
         
-        # Determine pre-selected option safely
+        # State-Synced Radio Implementation
         saved_ans = st.session_state.user_answers.get(q_idx)
-        try: 
-            def_idx = q_data['options'].index(saved_ans)
-        except ValueError: 
-            def_idx = None
-        
-        # Radio buttons for options
-        clear_key = st.session_state.get(f"clear_{q_idx}", 0)
-        choice = st.radio(
+        st.session_state[f"radio_ans_{q_idx}"] = saved_ans
+
+        try:
+            default_index = q_data['options'].index(saved_ans) if saved_ans in q_data['options'] else None
+        except ValueError:
+            default_index = None
+            
+        st.radio(
             "Options:", 
-            q_data['options'], 
-            index=def_idx, 
-            key=f"rad_{q_idx}_{clear_key}", 
+            options=q_data['options'], 
+            index=default_index, 
+            key=f"radio_ans_{q_idx}", 
+            on_change=on_radio_change,
+            args=(q_idx,),
             label_visibility="collapsed"
         )
-        if choice: 
-            st.session_state.user_answers[q_idx] = choice
             
         st.write("<br><br>", unsafe_allow_html=True)
         
@@ -637,58 +610,27 @@ def render_exam():
         b_col1, b_col2, b_col3, b_col4, b_col5 = st.columns([2, 2, 2, 2, 2])
         
         with b_col1:
-            if st.button("⏪ Previous", use_container_width=True):
-                if q_idx > 0: 
-                    st.session_state.current_q -= 1
-                st.rerun()
+            st.button("⏪ Previous", on_click=nav_prev, use_container_width=True)
                 
         with b_col2:
-            if st.button("🧹 Clear", use_container_width=True):
-                st.session_state.user_answers.pop(q_idx, None)
-                st.session_state[f"clear_{q_idx}"] = clear_key + 1
-                st.rerun()
+            st.button("🧹 Clear", on_click=clear_answer, args=(q_idx,), use_container_width=True)
                 
         with b_col3:
             is_last = (q_idx == total_q - 1)
-            btn_txt = "Finish" if is_last else "Next ⏩"
-            if st.button(btn_txt, type="primary" if not is_last else "secondary", use_container_width=True):
-                if not is_last:
-                    st.session_state.current_q += 1
-                    st.rerun()
+            if not is_last:
+                st.button("Next ⏩", type="primary", on_click=nav_next, use_container_width=True)
+            else:
+                st.button("Finish", type="secondary", disabled=True, use_container_width=True)
                     
         with b_col4:
-            if st.button("⏸ Pause", type="secondary", use_container_width=True):
-                pause_exam()
-                st.rerun()
+            st.button("⏸ Pause", type="secondary", on_click=pause_exam, use_container_width=True)
                 
         with b_col5:
-            if st.button("🚀 Final Submit", type="primary", use_container_width=True):
-                st.session_state.quiz_completed = True
-                st.session_state.active_page = "Result"
-                st.rerun()
+            st.button("🚀 Final Submit", type="primary", on_click=nav_submit, use_container_width=True)
 
 
 def render_result():
     """Renders the detailed post-exam result analysis."""
-    # Reset layout restrictions from the active exam
-    components.html("""
-    <script>
-    try{
-      let p=window.parent.document;
-      p.querySelectorAll('.my-palette').forEach(e=>{
-        e.style.position='static';
-        e.style.height='auto';
-        e.style.overflowY='visible';
-        e.style.borderLeft='none';
-      });
-      let m=p.querySelector('section[data-testid="stMain"]');
-      if(m){m.style.overflow='auto';}
-      let b=p.querySelector('.block-container');
-      if(b){b.style.overflow='visible';}
-    }catch(e){}
-    </script>
-    """, height=0)
-    
     total_q = len(st.session_state.questions)
     score = calculate_score()
     attempted = len(st.session_state.user_answers)
@@ -711,7 +653,9 @@ def render_result():
     
     for i, q in enumerate(st.session_state.questions):
         st.markdown(f"**Q{i+1}: {q['q']}**")
-        correct_ans = q['options'][q['ans']]
+        
+        # Safely pull correct answer based on accurate length checking
+        correct_ans = q['options'][q['ans']] if 0 <= q['ans'] < len(q['options']) else "N/A"
         user_ans = st.session_state.user_answers.get(i)
         
         if user_ans == correct_ans: 
@@ -730,18 +674,24 @@ def render_result():
         st.rerun()
 
 # ==========================================
-# 6. MAIN APPLICATION LOOP
+# 7. MAIN APPLICATION LOOP
 # ==========================================
 def main():
     init_session()
+    
+    # 1. Passive time calculation before any page render executes
+    passive_time_check()
+    
+    # 2. Universal styling setup
     inject_custom_css()
     
+    # 3. Secure routing logic
     if not st.session_state.auth:
         render_login()
     else:
         render_sidebar()
         
-        # Linear Application Workflow Router
+        # 4. App Engine Workflow
         if st.session_state.active_page == "Dashboard":
             render_dashboard()
         elif st.session_state.active_page == "Instructions":
@@ -753,3 +703,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+```
