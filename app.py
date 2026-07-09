@@ -287,12 +287,39 @@ def inject_custom_css():
 
         /* Palette grid tweaks for better sizing */
         .palette-button-container {{ margin-bottom: 8px; }}
+
+        /* 1:1 Aspect Ratio Square Question Palette Buttons Fix */
+        .palette-button-container div.stButton > button {
+            aspect-ratio: 1 / 1 !important;
+            width: 100% !important;
+            height: auto !important;
+            padding: 0 !important;
+            display: flex !important;
+            flex-direction: column !important;
+            align-items: center !important;
+            justify-content: center !important;
+            border-radius: 8px !important;
+        }
+        
+        .palette-button-container div.stButton > button p {
+            margin: 0 !important;
+            white-space: pre-wrap !important;
+            text-align: center !important;
+            line-height: 1.2 !important;
+            font-size: 14px !important;
+        }
         
         /* Mobile Responsiveness */
         @media (max-width: 768px) {{
             .block-container {{ padding: 1rem 0.5rem !important; }}
             h3 {{ font-size: 1.3rem !important; line-height: 1.4 !important; }}
             div.stButton > button {{ font-size: 14px !important; padding: 0.4rem !important; }}
+            
+            /* Prevent buttons from becoming giant squares on mobile layout */
+            .palette-button-container div.stButton > button {{
+                max-width: 70px !important;
+                margin: 0 auto !important;
+            }}
         }}
         </style>
     """, unsafe_allow_html=True)
@@ -524,22 +551,35 @@ def render_exam():
             "</p>", unsafe_allow_html=True
         )
         
-        # Flex Grid Palette
-        grid_cols = st.columns(5)
-        for i in range(total_q):
-            if st.session_state.user_answers.get(i) is not None: 
-                icon = "🟢"
-            elif i == q_idx: 
-                icon = "🔵"
-            elif i in st.session_state.visited_questions: 
-                icon = "🔴"
-            else: 
-                icon = "⚪"
-                
-            with grid_cols[i % 5]:
-                st.markdown("<div class='palette-button-container'>", unsafe_allow_html=True)
-                st.button(f"{icon}\n{i+1}", key=f"pal_{i}", on_click=nav_goto, args=(i,))
-                st.markdown("</div>", unsafe_allow_html=True)
+        # 1. Independent Scrollable Container Implementation
+        try:
+            # Streamlit >= 1.30 (Removes default border for a cleaner look)
+            palette_scroll = st.container(height=400, border=False)
+        except TypeError:
+            try:
+                # Streamlit >= 1.28 (Standard native scroll container)
+                palette_scroll = st.container(height=400)
+            except TypeError:
+                # Fallback for very old versions
+                palette_scroll = st.container()
+
+        # Flex Grid Palette inside the scroll container
+        with palette_scroll:
+            grid_cols = st.columns(5)
+            for i in range(total_q):
+                if st.session_state.user_answers.get(i) is not None: 
+                    icon = "🟢"
+                elif i == q_idx: 
+                    icon = "🔵"
+                elif i in st.session_state.visited_questions: 
+                    icon = "🔴"
+                else: 
+                    icon = "⚪"
+                    
+                with grid_cols[i % 5]:
+                    st.markdown("<div class='palette-button-container'>", unsafe_allow_html=True)
+                    st.button(f"{icon}\n{i+1}", key=f"pal_{i}", on_click=nav_goto, args=(i,))
+                    st.markdown("</div>", unsafe_allow_html=True)
 
     # ================== LEFT PANEL (Main Question Area) ==================
     with col_main:
