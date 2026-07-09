@@ -32,8 +32,11 @@ if not os.path.exists(CSV_FOLDER): os.makedirs(CSV_FOLDER)
 
 ALLOWED_USERS = {
     "Jiten (Admin)": "admin123",
-    "Rahul (Student)": "rahul2026",
-    "Amit (Student)": "amit999"
+    "Jili (Student)": "jili1999",
+    "binita (Student)": "bini1993",
+    "Satish (Student)": "satish2004",
+    "gaurav (Kalu)": "gaurav1997",
+    "Arvind (student)": "arvind1994"
 }
 
 # ==========================================
