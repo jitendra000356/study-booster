@@ -7,11 +7,11 @@ import base64
 from datetime import datetime
 
 # ==========================================
-# 1. PAGE CONFIGURATION & BACKGROUND LOGIC
+# 1. PAGE CONFIGURATION
 # ==========================================
 st.set_page_config(page_title="Study Booster", page_icon="🎓", layout="wide", initial_sidebar_state="collapsed")
 
-# 🖼️ Background Image Setup
+# 🖼️ Background Setup
 def add_bg_from_local(image_file):
     try:
         with open(image_file, "rb") as image_file:
@@ -29,61 +29,37 @@ def add_bg_from_local(image_file):
             """,
             unsafe_allow_html=True
         )
-    except:
-        pass
+    except: pass
 
 add_bg_from_local('bg.jpg') 
 
-# 🛠️ SUPER CLEAN & SAFE CSS
+# 🛠️ BASE CSS (Left Questions Area ke liye)
 st.markdown("""
     <style>
-    /* 1. Main Background Box */
     .block-container { 
         max-width: 96% !important; 
-        padding-top: 1.5rem !important; 
-        padding-bottom: 1.5rem !important; 
+        padding-top: 1rem !important; 
+        padding-bottom: 1rem !important; 
         background-color: rgba(255, 255, 255, 0.94) !important; 
         border-radius: 12px;
         margin-top: 10px;
         box-shadow: 0 4px 10px rgba(0,0,0,0.15);
     }
     header[data-testid="stHeader"] { background-color: transparent !important; }
-
-    /* 2. Button Styling */
-    div.stButton > button { 
-        border-radius: 8px !important; 
-        font-weight: bold !important; 
-        padding: 0.3rem 0.1rem !important; 
-        width: 100%;
-    }
-    div.stButton > button[kind="primary"] { 
-        background-color: #4F46E5 !important; 
-        color: white !important; 
-        padding: 0.5rem 1rem !important; 
-    }
-
-    /* 3. 📌 RIGHT COLUMN STICKY & SCROLLABLE */
-    div[data-testid="column"]:nth-of-type(2) {
-        position: -webkit-sticky !important;
-        position: sticky !important;
-        top: 20px !important;
-        height: 85vh !important; 
-        overflow-y: auto !important; 
-        padding-right: 10px;
-        border-left: 2px solid #E2E8F0;
-        padding-left: 15px;
-    }
     
-    /* Scrollbar Design */
-    div[data-testid="column"]:nth-of-type(2)::-webkit-scrollbar { width: 5px; }
-    div[data-testid="column"]:nth-of-type(2)::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 5px; }
+    /* Left Panel Navigation Buttons */
+    div.stButton > button[kind="primary"] { 
+        background-color: #4F46E5 !important; color: white !important; 
+        border-radius: 6px !important; font-weight: bold !important; 
+    }
+    div.stButton > button[kind="secondary"] { 
+        border-radius: 6px !important; font-weight: bold !important; 
+    }
     </style>
 """, unsafe_allow_html=True)
 
 CSV_FOLDER = 'saved_csvs'
-if not os.path.exists(CSV_FOLDER):
-    os.makedirs(CSV_FOLDER)
-
+if not os.path.exists(CSV_FOLDER): os.makedirs(CSV_FOLDER)
 ALLOWED_USERS = {"Jiten (Admin)": "admin123", "Rahul (Student)": "rahul2026"}
 
 # ==========================================
@@ -129,8 +105,7 @@ def load_quiz(file_name, timer_mode, time_minutes):
         reader = csv.DictReader(f)
         for row in reader:
             st.session_state.questions.append({
-                'q': row['Question'], 
-                'options': [row['Option1'], row['Option2'], row['Option3'], row['Option4'], row['Option5']], 
+                'q': row['Question'], 'options': [row['Option1'], row['Option2'], row['Option3'], row['Option4'], row['Option5']], 
                 'ans': int(row['Answer']) - 1
             })
     st.session_state.topic = os.path.splitext(file_name)[0].replace("_", " ")
@@ -151,8 +126,7 @@ st.sidebar.divider()
 menu = st.sidebar.radio("Navigation", ["📚 Dashboard", "📝 Live Exam"])
 st.sidebar.divider()
 if st.sidebar.button("🚪 Logout", type="secondary"):
-    st.session_state.auth = False
-    st.rerun()
+    st.session_state.auth = False; st.rerun()
 
 if menu == "📚 Dashboard":
     st.header("Welcome to Study Booster! 🚀")
@@ -160,20 +134,16 @@ if menu == "📚 Dashboard":
         with st.expander("➕ Upload New Quiz File"):
             uploaded_file = st.file_uploader("Upload CSV", type=['csv'])
             if uploaded_file:
-                with open(os.path.join(CSV_FOLDER, uploaded_file.name), "wb") as f:
-                    f.write(uploaded_file.getbuffer())
+                with open(os.path.join(CSV_FOLDER, uploaded_file.name), "wb") as f: f.write(uploaded_file.getbuffer())
                 st.success("Test uploaded successfully!")
-                
     st.subheader("⚙️ Exam Settings")
     t_mode = st.radio("Timer Setup:", ["Total Time (Minutes)", "No Timer"], horizontal=True)
     t_val = 0
-    if t_mode == "Total Time (Minutes)":
-        t_val = st.number_input("Enter Total Time (in Minutes):", min_value=1, value=30)
+    if t_mode == "Total Time (Minutes)": t_val = st.number_input("Enter Total Time (in Minutes):", min_value=1, value=30)
     
     st.subheader("Available Test Series")
     files = [f for f in os.listdir(CSV_FOLDER) if f.endswith('.csv')]
-    if not files:
-        st.info("No test series available right now.")
+    if not files: st.info("No test series available right now.")
     else:
         for file in files:
             col1, col2 = st.columns([4, 1])
@@ -187,8 +157,7 @@ if menu == "📚 Dashboard":
 # ==========================================
 elif menu == "📝 Live Exam":
     if not st.session_state.quiz_ready:
-        st.warning("⚠️ No active test. Please load a quiz from Dashboard first.")
-        st.stop()
+        st.warning("⚠️ No active test. Please load a quiz from Dashboard first."); st.stop()
         
     # --- PHASE 1: INSTRUCTIONS ---
     if not st.session_state.exam_started:
@@ -214,83 +183,141 @@ elif menu == "📝 Live Exam":
             st.markdown(f"**Q{i+1}: {q['q']}**")
             correct_ans = q['options'][q['ans']]
             user_ans = st.session_state.user_answers.get(i)
-            if user_ans == correct_ans:
-                st.success(f"Your: {user_ans} (✅)")
-            elif user_ans is None:
-                st.warning(f"Not Attempted. Correct: {correct_ans}")
-            else:
-                st.error(f"Your: {user_ans} (❌) | Correct: {correct_ans}")
+            if user_ans == correct_ans: st.success(f"Your: {user_ans} (✅)")
+            elif user_ans is None: st.warning(f"Not Attempted. Correct: {correct_ans}")
+            else: st.error(f"Your: {user_ans} (❌) | Correct: {correct_ans}")
         st.stop()
             
-    # --- PHASE 3: ACTIVE EXAM (FIXED SPLIT) ---
+    # --- PHASE 3: ACTIVE EXAM (FIXED INDEPENDENT SCROLL) ---
     else:
-        # TIMING CHECK
-        if st.session_state.timer_mode == "Total Time (Minutes)":
-            remaining_time = st.session_state.end_time - time.time()
-            if remaining_time <= 0:
-                st.session_state.quiz_completed = True
-                st.rerun()
+        if st.session_state.timer_mode == "Total Time (Minutes)" and (st.session_state.end_time - time.time()) <= 0:
+            st.session_state.quiz_completed = True; st.rerun()
 
         q_idx = st.session_state.current_q
         st.session_state.visited_questions.add(q_idx)
         total_q = len(st.session_state.questions)
         q_data = st.session_state.questions[q_idx]
 
-        # 👈 LEFT (75%) | 👉 RIGHT (25%)
+        # 👈 Left Space (75%) | 👉 Right Space (25%)
         col_main, col_pal = st.columns([3.5, 1.2]) 
         
-        # 📌 RIGHT PANEL (Timer + Grid)
+        # 📌 RIGHT PANEL (Timer + Palette Grid)
         with col_pal:
+            # DOM Injector Master Hack (Python String Replacement se safe kiya gaya hai)
+            timer_code = ""
+            ui_code = ""
+            
             if st.session_state.timer_mode == "Total Time (Minutes)":
                 rem_sec = int(st.session_state.end_time - time.time())
-                timer_html = """
-                <!DOCTYPE html>
-                <html><head><style>
-                body { margin:0; padding:0; font-family:sans-serif; background:transparent; }
-                .timer-box { background-color:#fee2e2; border:2px solid #ef4444; color:#dc2626; padding:8px 0; border-radius:8px; font-size:22px; font-weight:bold; text-align:center; box-shadow:0 2px 4px rgba(0,0,0,0.1); }
-                </style></head><body>
-                    <div class="timer-box">⏳ <span id="time">00:00</span></div>
-                    <script>
-                        var countDownDate = new Date().getTime() + (REPLACE_SEC * 1000);
-                        var x = setInterval(function() {
-                            var now = new Date().getTime();
-                            var distance = countDownDate - now;
-                            if (distance <= 0) {
-                                clearInterval(x); document.getElementById("time").innerHTML = "TIME UP!";
-                                var buttons = window.parent.document.querySelectorAll('button');
-                                for(var i=0; i<buttons.length; i++) { if(buttons[i].innerText.includes('Final Submit')) { buttons[i].click(); break; } }
-                            } else {
-                                var m = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
-                                var s = Math.floor((distance % (1000 * 60)) / 1000);
-                                m = m < 10 ? "0" + m : m; s = s < 10 ? "0" + s : s;
-                                document.getElementById("time").innerHTML = m + ":" + s;
+                ui_code = '<div class="timer-box">⏳ <span id="time">00:00</span></div>'
+                timer_code = f"""
+                var countDownDate = new Date().getTime() + ({rem_sec} * 1000);
+                var x = setInterval(function() {{
+                    var now = new Date().getTime();
+                    var distance = countDownDate - now;
+                    if (distance <= 0) {{
+                        clearInterval(x); document.getElementById("time").innerHTML = "TIME UP!";
+                        var buttons = window.parent.document.querySelectorAll('button');
+                        for(var i=0; i<buttons.length; i++) {{ if(buttons[i].innerText.includes('Final Submit')) {{ buttons[i].click(); break; }} }}
+                    }} else {{
+                        var m = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
+                        var s = Math.floor((distance % (1000 * 60)) / 1000);
+                        m = m < 10 ? "0" + m : m; s = s < 10 ? "0" + s : s;
+                        document.getElementById("time").innerHTML = m + ":" + s;
+                    }}
+                }}, 1000);
+                """
+            else:
+                ui_code = '<div class="timer-box no-timer">📝 No Time Limit</div>'
+
+            html_hack = """
+            <!DOCTYPE html>
+            <html><head><style>
+            body { margin:0; padding:0; font-family:sans-serif; }
+            .timer-box { background-color:#fee2e2; border:2px solid #ef4444; color:#dc2626; padding:8px 0; border-radius:8px; font-size:20px; font-weight:bold; text-align:center; box-shadow:0 2px 4px rgba(0,0,0,0.1); margin-bottom: 5px; }
+            .no-timer { background-color:#e0f2fe; border-color:#38bdf8; color:#0284c7; }
+            </style></head><body>
+                __UI_CODE__
+                <script>
+                    __TIMER_CODE__
+                    
+                    // 🚀 The Magic Scroll & Sticky Fix 🚀
+                    setTimeout(function() {
+                        try {
+                            var frame = window.frameElement;
+                            // Exact column pakadne ki Ninja Technique
+                            var col = frame.closest('div[data-testid="column"]');
+                            if(!col) col = frame.parentElement.parentElement.parentElement;
+                            
+                            if (col) {
+                                col.style.position = '-webkit-sticky';
+                                col.style.position = 'sticky';
+                                col.style.top = '15px';
+                                col.style.height = '85vh'; /* Right Box ki fixed height */
+                                col.style.overflowY = 'auto'; /* Scrollbar sirf yaha aayega */
+                                col.style.borderLeft = '2px solid #e2e8f0';
+                                col.style.paddingLeft = '10px';
+                                col.style.paddingRight = '5px';
+                                
+                                col.classList.add('my-palette'); // Class add ki taki style apply ho
+                                
+                                // Parent overflow fix (Streamlit layout zidd todne ke liye)
+                                var main = window.parent.document.querySelector('section[data-testid="stMain"]');
+                                if(main) main.style.overflow = 'visible';
+                                var block = window.parent.document.querySelector('.block-container');
+                                if(block) block.style.overflow = 'visible';
+                                
+                                // 🌟 Round Buttons & Compact Design CSS
+                                if (!window.parent.document.getElementById('palette-css')) {
+                                    var style = window.parent.document.createElement('style');
+                                    style.id = 'palette-css';
+                                    style.innerHTML = `
+                                        .my-palette::-webkit-scrollbar { width: 5px; }
+                                        .my-palette::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 5px; }
+                                        
+                                        /* Palette ke Gol/Rounded Buttons */
+                                        .my-palette div.stButton > button {
+                                            padding: 0px !important;
+                                            font-size: 13px !important;
+                                            height: 38px !important;
+                                            min-height: 38px !important;
+                                            border-radius: 6px !important;
+                                            border: 1px solid #cbd5e1 !important;
+                                        }
+                                        /* Grid ke beech ka space kam karna */
+                                        .my-palette div[data-testid="column"] {
+                                            padding: 2px !important;
+                                        }
+                                    `;
+                                    window.parent.document.head.appendChild(style);
+                                }
                             }
-                        }, 1000);
-                    </script>
-                </body></html>
-                """.replace("REPLACE_SEC", str(rem_sec))
-                components.html(timer_html, height=65) 
+                        } catch(e) {}
+                    }, 200);
+                </script>
+            </body></html>
+            """
+            # Safe replacement (No bracket error)
+            html_hack = html_hack.replace("__UI_CODE__", ui_code).replace("__TIMER_CODE__", timer_code)
+            components.html(html_hack, height=60) 
             
             st.markdown("<h5 style='text-align:center; margin-top:5px;'>Question Palette</h5>", unsafe_allow_html=True)
             st.markdown("<p style='text-align:center; font-size:12px; margin-bottom:10px;'>🔵 Curr &nbsp; 🟢 Ans &nbsp; 🔴 Skip &nbsp; ⚪ Unvisit</p>", unsafe_allow_html=True)
             
+            # Palette Buttons
             grid_cols = st.columns(5)
             for i in range(total_q):
-                if i == q_idx:
-                    icon = "🔵"
-                elif st.session_state.user_answers.get(i) is not None:
-                    icon = "🟢"
-                elif i in st.session_state.visited_questions:
-                    icon = "🔴"
-                else:
-                    icon = "⚪"
+                if i == q_idx: icon = "🔵"
+                elif st.session_state.user_answers.get(i) is not None: icon = "🟢"
+                elif i in st.session_state.visited_questions: icon = "🔴"
+                else: icon = "⚪"
                     
                 with grid_cols[i % 5]:
                     if st.button(f"{icon} {i+1}", key=f"pal_{i}"):
                         st.session_state.current_q = i
                         st.rerun()
 
-        # 👈 LEFT PANEL (Question Area)
+        # 👈 LEFT PANEL (Main Question Area)
         with col_main:
             st.markdown(f"<h3 style='color:#4F46E5; margin-top:0;'>{st.session_state.topic}</h3>", unsafe_allow_html=True)
             st.write("---")
@@ -298,15 +325,12 @@ elif menu == "📝 Live Exam":
             st.markdown(f"<h4 style='line-height: 1.5;'>Q{q_idx + 1}. {q_data['q']}</h4>", unsafe_allow_html=True)
             
             saved_ans = st.session_state.user_answers.get(q_idx)
-            try:
-                def_idx = q_data['options'].index(saved_ans)
-            except:
-                def_idx = None
+            try: def_idx = q_data['options'].index(saved_ans)
+            except: def_idx = None
             
             clear_key = st.session_state.get(f"clear_{q_idx}", 0)
             choice = st.radio("Options:", q_data['options'], index=def_idx, key=f"rad_{q_idx}_{clear_key}", label_visibility="collapsed")
-            if choice:
-                st.session_state.user_answers[q_idx] = choice
+            if choice: st.session_state.user_answers[q_idx] = choice
                 
             st.write("")
             st.write("")
@@ -314,8 +338,7 @@ elif menu == "📝 Live Exam":
             b_col1, b_col2, b_col3, b_col4 = st.columns(4)
             with b_col1:
                 if st.button("⏪ Previous"):
-                    if q_idx > 0:
-                        st.session_state.current_q -= 1
+                    if q_idx > 0: st.session_state.current_q -= 1
                     st.rerun()
             with b_col2:
                 if st.button("🧹 Clear"):
@@ -324,8 +347,7 @@ elif menu == "📝 Live Exam":
                     st.rerun()
             with b_col3:
                 is_last = (q_idx == total_q - 1)
-                btn_txt = "Next ⏩" if not is_last else "Finish"
-                if st.button(btn_txt, type="primary"):
+                if st.button("Next ⏩" if not is_last else "Finish", type="primary"):
                     if not is_last:
                         st.session_state.current_q += 1
                         st.rerun()
