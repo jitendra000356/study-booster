@@ -584,33 +584,31 @@ def render_exam():
         not_visit_count = total_q - visited_count
         
         # Testbook-style Profile & Legend
-        st.markdown(f"""
-        <div style='background-color: #f8fafc; padding: 12px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #e2e8f0;'>
-            <div style='display: flex; align-items: center; gap: 10px; margin-bottom: 12px;'>
-                <div style='width: 30px; height: 30px; background-color: #3b82f6; color: white; border-radius: 50%; display: flex; justify-content: center; align-items: center; font-weight: bold;'>
-                    👤
-                </div>
-                <span style='font-weight: 600; color: #1e293b;'>{st.session_state.current_user.split()[0]}</span>
-            </div>
-            
-            <div style='display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 8px;'>
-                <div style='display:flex; align-items:center; gap:5px; width:48%;'>
-                    <div style='min-width:20px; height:20px; background:#22c55e; color:white; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:bold;'>{ans_count}</div> 
-                    <span style='color:#475569;'>Answered</span>
-                </div>
-                <div style='display:flex; align-items:center; gap:5px; width:48%;'>
-                    <div style='min-width:20px; height:20px; background:#ef4444; color:white; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:bold;'>{not_ans_count}</div> 
-                    <span style='color:#475569;'>Not Answered</span>
-                </div>
-            </div>
-            <div style='display: flex; justify-content: flex-start; font-size: 11px;'>
-                <div style='display:flex; align-items:center; gap:5px;'>
-                    <div style='min-width:20px; height:20px; background:#ffffff; color:#334155; border:1px solid #cbd5e1; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:bold;'>{not_visit_count}</div> 
-                    <span style='color:#475569;'>Not Visited</span>
-                </div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+        html_legend = f"""
+<div style='background-color: #f8fafc; padding: 12px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #e2e8f0;'>
+<div style='display: flex; align-items: center; gap: 10px; margin-bottom: 12px;'>
+<div style='width: 30px; height: 30px; background-color: #3b82f6; color: white; border-radius: 50%; display: flex; justify-content: center; align-items: center; font-weight: bold;'>👤</div>
+<span style='font-weight: 600; color: #1e293b;'>{st.session_state.current_user.split()[0]}</span>
+</div>
+<div style='display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 8px;'>
+<div style='display:flex; align-items:center; gap:5px; width:48%;'>
+<div style='min-width:20px; height:20px; background:#22c55e; color:white; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:bold;'>{ans_count}</div> 
+<span style='color:#475569;'>Answered</span>
+</div>
+<div style='display:flex; align-items:center; gap:5px; width:48%;'>
+<div style='min-width:20px; height:20px; background:#ef4444; color:white; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:bold;'>{not_ans_count}</div> 
+<span style='color:#475569;'>Not Answered</span>
+</div>
+</div>
+<div style='display: flex; justify-content: flex-start; font-size: 11px;'>
+<div style='display:flex; align-items:center; gap:5px;'>
+<div style='min-width:20px; height:20px; background:#ffffff; color:#334155; border:1px solid #cbd5e1; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:bold;'>{not_visit_count}</div> 
+<span style='color:#475569;'>Not Visited</span>
+</div>
+</div>
+</div>
+"""
+        st.markdown(html_legend, unsafe_allow_html=True)
         
         # Testbook-style Section Header
         st.markdown(
