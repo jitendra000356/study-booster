@@ -146,7 +146,6 @@ def save_timers_data(data):
 def init_session():
     """Initialize all session state variables safely with refresh persistence support."""
     # --- DEFAULT INITIALIZATION DICTIONARY ---
-    # Moved up so we can use it to filter safe variables during load
     default_state = {
         'auth': False, 
         'current_user': "", 
@@ -174,7 +173,6 @@ def init_session():
     query_params = st.query_params
     sid = query_params.get("sid", None)
     
-    # If session ID exists in URL but memory is cleared (e.g. F5 refresh happened)
     if sid and not st.session_state.get('auth', False):
         session_path = os.path.join(SESSION_FOLDER, f"{sid}.pkl")
         if os.path.exists(session_path):
@@ -182,12 +180,11 @@ def init_session():
                 with open(session_path, "rb") as f:
                     saved_state = pickle.load(f)
                 for k, v in saved_state.items():
-                    # FILTER: Only restore variables that belong to our default state (ignores widget keys)
                     if k in default_state:
                         st.session_state[k] = v
-                return  # State fully restored!
+                return 
             except Exception:
-                pass  # Fallback to defaults if file is somehow corrupted
+                pass 
                 
     # --- DEFAULT INITIALIZATION ---
     for key, value in default_state.items():
@@ -206,7 +203,6 @@ def passive_time_check():
     elapsed = now - st.session_state.get('last_calc_time', now)
     st.session_state.last_calc_time = now
 
-    # Deduct Time
     if st.session_state.timer_mode == "Total Time (Minutes)":
         st.session_state.remaining_seconds -= elapsed
         if st.session_state.remaining_seconds <= 0:
@@ -215,12 +211,10 @@ def passive_time_check():
             record_attempt_usage()
             st.rerun()
 
-    # Auto-Pause if inactive for 5 minutes (300 seconds)
     inactive_duration = now - st.session_state.get('last_interaction_time', now)
     if inactive_duration > 300:
         st.session_state.is_paused = True
         if st.session_state.timer_mode == "Total Time (Minutes)":
-            # Refund the lost idle time beyond the 5 min penalty
             st.session_state.remaining_seconds += (inactive_duration - 300)
         st.session_state.last_interaction_time = now
         st.rerun()
@@ -229,7 +223,6 @@ def record_activity():
     """Callback wrapper applied to buttons/inputs to record user activity."""
     now = time.time()
     
-    # Process time normally before recording action
     if not st.session_state.is_paused:
         elapsed = now - st.session_state.last_calc_time
         if st.session_state.timer_mode == "Total Time (Minutes)":
@@ -237,7 +230,6 @@ def record_activity():
     
     st.session_state.last_calc_time = now
     
-    # Check if they were already inactive before this action
     inactive_duration = now - st.session_state.last_interaction_time
     if inactive_duration > 300 and not st.session_state.is_paused:
         st.session_state.is_paused = True
@@ -245,7 +237,6 @@ def record_activity():
             st.session_state.remaining_seconds += (inactive_duration - 300)
         st.session_state.last_interaction_time = now
     else:
-        # Normal interaction recorded
         st.session_state.last_interaction_time = now
 
 # ==========================================
@@ -259,7 +250,6 @@ def load_quiz(file_name):
     with open(file_path, 'r', encoding='utf-8-sig', errors='ignore') as f:
         reader = csv.DictReader(f)
         for row in reader:
-            # Dynamic option loader ignores empty string cells
             opts = []
             for i in range(1, 6):
                 col_name = f'Option{i}'
@@ -272,20 +262,19 @@ def load_quiz(file_name):
                 'ans': int(row['Answer']) - 1
             })
             
-    # Apply Admin Configured Timer Settings
     timers_data = load_timers_data()
-    t_config = timers_data.get(file_name, {"mode": "Total Time", "value": 30}) # Default to 30 mins
+    t_config = timers_data.get(file_name, {"mode": "Total Time", "value": 30})
     
     if t_config["mode"] == "No Timer":
         t_mode = "No Timer"
         t_val = 0
         rem_sec = 0
     elif t_config["mode"] == "Per Question":
-        t_mode = "Total Time (Minutes)" # We disguise it as Total Time so the existing visual timer works flawlessly
+        t_mode = "Total Time (Minutes)" 
         total_seconds = len(st.session_state.questions) * t_config["value"]
         t_val = round(total_seconds / 60, 2)
         rem_sec = total_seconds
-    else: # Total Time
+    else: 
         t_mode = "Total Time (Minutes)"
         t_val = t_config["value"]
         rem_sec = t_val * 60
@@ -295,13 +284,12 @@ def load_quiz(file_name):
     st.session_state.current_q = 0
     st.session_state.user_answers = {}
     st.session_state.visited_questions = {0}
-    st.session_state.marked_questions = set() # Reset marks
+    st.session_state.marked_questions = set() 
     st.session_state.timer_mode = t_mode
     st.session_state.time_val = t_val
     st.session_state.remaining_seconds = rem_sec
     st.session_state.is_paused = False
     
-    # Store test info for accurate attempt recording
     st.session_state.current_test_filename = file_name
     st.session_state.attempt_recorded = False
 
@@ -314,7 +302,6 @@ def calculate_score():
             score += 1
     return score
 
-# -- Button Navigation Callbacks --
 def nav_goto(q_idx):
     record_activity()
     if not st.session_state.is_paused:
@@ -368,7 +355,7 @@ def on_radio_change(q_idx):
 # 5. CSS & JAVASCRIPT INJECTION
 # ==========================================
 def inject_custom_css():
-    """Injects responsive, modern, and bug-free CSS. Left untouched as requested."""
+    """Injects responsive, modern, and bug-free CSS."""
     try:
         with open('bg.jpg', "rb") as image_file:
             encoded_string = base64.b64encode(image_file.read())
@@ -387,7 +374,6 @@ def inject_custom_css():
         <style>
         {bg_css}
         
-        /* Main Professional Container */
         .block-container {{ 
             max-width: 98% !important; 
             padding: 1.5rem !important; 
@@ -398,10 +384,8 @@ def inject_custom_css():
             transition: all 0.3s ease;
         }}
         
-        /* Hide default Streamlit headers for clean UI */
         header[data-testid="stHeader"] {{ background-color: transparent !important; }}
         
-        /* Force Text Colors to be readable inside main container */
         section[data-testid="stMain"] p, 
         section[data-testid="stMain"] h1, 
         section[data-testid="stMain"] h2, 
@@ -415,7 +399,6 @@ def inject_custom_css():
             color: #0f172a !important; 
         }}
 
-        /* Universal Button Styling */
         div.stButton > button {{ 
             background-color: #ffffff !important; 
             border: 2px solid #e2e8f0 !important;
@@ -433,7 +416,6 @@ def inject_custom_css():
             transform: translateY(-2px);
         }}
         
-        /* Primary Buttons */
         div.stButton > button[kind="primary"] {{ 
             background: linear-gradient(135deg, #4f46e5 0%, #3b82f6 100%) !important; 
             border: none !important;
@@ -446,7 +428,6 @@ def inject_custom_css():
             box-shadow: 0 6px 20px rgba(79, 70, 229, 0.6) !important;
         }}
 
-        /* Secondary Pause Buttons */
         div.stButton > button[kind="secondary"] {{
             background-color: #fff1f2 !important;
             border-color: #fecdd3 !important;
@@ -546,7 +527,6 @@ def render_login():
                     st.session_state.current_user = username
                     st.session_state.active_page = "Dashboard"
                     
-                    # Generate and set persistent session ID
                     new_sid = base64.urlsafe_b64encode(os.urandom(12)).decode()
                     st.session_state.sid = new_sid
                     st.query_params["sid"] = new_sid
@@ -571,7 +551,6 @@ def render_sidebar():
         
     st.sidebar.divider()
     if st.sidebar.button("🚪 Logout", type="secondary", use_container_width=True):
-        # Clear persistent session securely
         if st.session_state.get("sid"):
             session_path = os.path.join(SESSION_FOLDER, f"{st.session_state.sid}.pkl")
             if os.path.exists(session_path):
@@ -581,7 +560,6 @@ def render_sidebar():
         if "sid" in st.query_params:
             del st.query_params["sid"]
             
-        # Hard wipe memory state to secure termination
         for key in list(st.session_state.keys()):
             del st.session_state[key]
             
@@ -595,7 +573,6 @@ def render_dashboard():
     
     if "Admin" in st.session_state.current_user:
         
-        # --- FEATURE: QUESTION BANK MANAGEMENT (Folder/Subfolder Support) ---
         with st.expander("📁 Admin Panel: Question Bank Management", expanded=False):
             current_admin_path = st.session_state.get('admin_current_path', '')
             full_admin_path = os.path.join(CSV_FOLDER, current_admin_path.replace('/', os.sep))
@@ -647,7 +624,6 @@ def render_dashboard():
             st.markdown("#### Files")
             if not files: st.info("No files in this folder.")
             
-            # Pre-calculate all folders for Move operation
             all_folders = []
             for root, dirs, _ in os.walk(CSV_FOLDER):
                 for d in dirs:
@@ -673,7 +649,6 @@ def render_dashboard():
                     os.remove(file_p)
                     st.rerun()
 
-        # --- PREVIOUS TIMER MANAGEMENT (Updated to use recursive get_all_csv_files) ---
         with st.expander("⏱️ Admin Panel: Timer Management", expanded=False):
             st.markdown("Configure timer rules for each test individually.")
             all_tests_admin_tmr = get_all_csv_files()
@@ -696,7 +671,7 @@ def render_dashboard():
                     elif new_mode == "Per Question":
                         new_val = st.number_input("Seconds per Question", min_value=1, value=new_val if current_settings["mode"] == "Per Question" else 45)
                     else:
-                        new_val = 0 # No Timer
+                        new_val = 0 
                     
                     if st.button("Save Timer Settings", type="primary"):
                         timers_data[t_file] = {"mode": new_mode, "value": new_val}
@@ -705,7 +680,6 @@ def render_dashboard():
             else:
                 st.info("No tests available to configure.")
 
-        # --- PREVIOUS ATTEMPT MANAGEMENT (Updated to use recursive get_all_csv_files) ---
         with st.expander("⚙️ Admin Panel: Attempt Management", expanded=False):
             st.markdown("Select a user and a test to modify attempt limits.")
             a_col1, a_col2 = st.columns(2)
@@ -725,13 +699,11 @@ def render_dashboard():
                     set_allowed_attempts(sel_user, sel_test, new_limit)
                     st.success(f"✅ Updated! {sel_user.split()[0]} now has {new_limit} allowed attempts for {os.path.basename(sel_test)}.")
     
-    # --- STUDENTS VIEW (DASHBOARD TESTS LIST W/ FOLDERS & SEARCH) ---
     col_space1, col_tests, col_space2 = st.columns([1, 4, 1])
     
     with col_tests:
         st.markdown("### 📋 Available Test Series")
         
-        # Search Feature
         search_query = st.text_input("🔍 Search Test, Subject, or Folder...", "").strip()
         
         all_files = get_all_csv_files()
@@ -785,7 +757,6 @@ def render_dashboard():
                     else:
                         c2.button("Limit Reached", key=f"limit_{file}", disabled=True, help="You have reached the maximum number of attempts allowed for this test. Please contact the administrator.")
                         
-    # Start Test section appended directly to dashboard bottom
     if st.session_state.quiz_ready:
         st.divider()
         st.success(f"✅ **{st.session_state.topic}** is loaded and ready.")
@@ -807,7 +778,6 @@ def render_instructions():
             st.markdown("### Please read carefully before starting:")
             st.markdown(f"🔹 **Total Questions:** {len(st.session_state.questions)}")
             
-            # Format time display dynamically 
             time_display_str = "No Time Limit"
             if st.session_state.timer_mode != "No Timer":
                 time_display_str = f"{st.session_state.time_val} Minutes"
@@ -856,19 +826,17 @@ def render_exam():
     total_q = len(st.session_state.questions)
     q_data = st.session_state.questions[q_idx]
 
-    # Inject static architectural CSS for the right panel Layout and base Question Palette sizing.
     st.markdown("""
     <style>
     /* Question Panel (Right Column) Complete Redesign */
     div[data-testid="column"]:nth-of-type(2) {
-        background-color: #f0f8ff !important; /* Testbook light blue panel bg */
+        background-color: #f0f8ff !important;
         border: 1px solid #bfdbfe !important;
         border-radius: 8px !important;
         padding-bottom: 15px !important;
         overflow: hidden; 
     }
     
-    /* Perfect Square Grid Buttons base layout structural properties */
     div[data-testid="column"]:nth-of-type(2) div[data-testid="stHorizontalBlock"]:nth-of-type(1) button {
         aspect-ratio: 1 / 1 !important;
         width: 100% !important;
@@ -889,7 +857,6 @@ def render_exam():
         transition: all 0.2s ease !important;
     }
 
-    /* Force numbers to stay on a single line */
     div[data-testid="column"]:nth-of-type(2) div[data-testid="stHorizontalBlock"]:nth-of-type(1) button p {
         margin: 0 !important;
         padding: 0 !important;
@@ -897,7 +864,6 @@ def render_exam():
         white-space: nowrap !important; 
     }
     
-    /* Bottom buttons specifically mapped in the Right Panel */
     div[data-testid="column"]:nth-of-type(2) > div[data-testid="stVerticalBlock"] > div[data-testid="stHorizontalBlock"]:nth-of-type(2) div.stButton > button {
         background-color: #dbeafe !important;
         color: #1e40af !important;
@@ -907,7 +873,7 @@ def render_exam():
     }
     
     div[data-testid="column"]:nth-of-type(2) > div[data-testid="stVerticalBlock"] > div:last-child div.stButton > button {
-        background-color: #0ea5e9 !important; /* Cyan Submit Button */
+        background-color: #0ea5e9 !important;
         color: white !important;
         border: none !important;
         font-size: 14px !important;
@@ -924,10 +890,8 @@ def render_exam():
     </style>
     """, unsafe_allow_html=True)
 
-    # Native responsive Streamlit columns
     col_main, col_pal = st.columns([7, 3]) 
     
-    # Calculate Live Sync Statuses First
     ans_count = 0
     ans_marked_count = 0
     marked_count = 0
@@ -950,14 +914,13 @@ def render_exam():
         else:
             not_visit_count += 1
             
-    # ================== RIGHT PANEL (Timer + Palette) ==================
+    # ================== RIGHT PANEL ==================
     with col_pal:
         render_visual_timer()
         
         username_display = st.session_state.current_user.split()[0]
         avatar_letter = username_display[0].upper() if username_display else "U"
         
-        # Testbook-style Profile & Legend Redesign securely updated with accurate dynamic live counts and precise shapes
         html_legend = f"""
 <div style="background-color: #ffffff; padding: 15px; border-bottom: 1px solid #bfdbfe; margin: 10px -1.5rem 0 -1.5rem;">
 <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
@@ -992,7 +955,6 @@ def render_exam():
 """
         st.markdown(html_legend, unsafe_allow_html=True)
         
-        # Testbook-style Section Header
         st.markdown(
             f"""<div style='background-color:#dbeafe; padding:8px 15px; font-weight:700; color:#1e3a8a; font-size:12px; text-transform: uppercase; margin: 0 -1.5rem 10px -1.5rem; border-bottom: 1px solid #bfdbfe;'>
             SECTION : {st.session_state.topic}
@@ -1000,7 +962,6 @@ def render_exam():
             unsafe_allow_html=True
         )
         
-        # Independent Scrollable Container for the Buttons Grid
         try:
             palette_scroll = st.container(height=350, border=False)
         except TypeError:
@@ -1011,7 +972,6 @@ def render_exam():
 
         dynamic_css_blocks = []
 
-        # Flex Grid Palette inside the independent scroll container
         with palette_scroll:
             grid_cols = st.columns(5)
             for i in range(total_q):
@@ -1020,47 +980,53 @@ def render_exam():
                 is_mark = i in st.session_state.marked_questions
                 is_curr = (i == q_idx)
                 
-                # Dynamic targeting logic: accurately map button structural index based on Streamlit DOM rendering
                 c = (i % 5) + 1
                 r = (i // 5) + 1
                 
-                # Highly specific selector guarantees we only target the actual palette buttons exactly, bypassing wrappers
-                selector = f'div[data-testid="column"]:nth-of-type(2) div[data-testid="stHorizontalBlock"]:nth-of-type(1) div[data-testid="column"]:nth-of-type({c}) div.element-container:nth-of-type({r}) button'
+                # Highly robust structurally-isolated selector:
+                # Guarantees exact hit on the actual r-th button container inside the column, bypassing injected hidden layout divs.
+                base_first_container = 'div.element-container:not(div.element-container ~ div.element-container)'
+                row_selector = base_first_container + (' + div.element-container' * (r - 1))
+                
+                selector = f'div[data-testid="column"]:nth-of-type(2) div[data-testid="stHorizontalBlock"]:nth-of-type(1) div[data-testid="column"]:nth-of-type({c}) {row_selector} button'
                 
                 css_rule = ""
                 
-                # 1. Base Status Render with exact Testbook Shapes
+                # Exact Status Colors matching requirements
                 if is_ans and is_mark:
+                    # Answered & Marked: Purple background, Small green indicator/checkmark, White text
                     css_rule += f"{selector} {{ background-color: #9d48b1 !important; border-color: #9d48b1 !important; color: white !important; border-radius: 50% !important; overflow: visible !important; }} "
                     css_rule += f"{selector} p {{ color: white !important; }} "
                     css_rule += f"{selector}::after {{ content: ''; position: absolute; bottom: -2px; right: -2px; width: 10px; height: 10px; background-color: #2bc765; border-radius: 50%; border: 2px solid white; z-index: 3; }} "
                 elif is_ans:
+                    # Answered: Green background, White text
                     css_rule += f"{selector} {{ background-color: #2bc765 !important; border-color: #2bc765 !important; color: white !important; border-radius: 50px 50px 0 0 !important; }} "
                     css_rule += f"{selector} p {{ color: white !important; }} "
                 elif is_mark:
+                    # Marked for Review: Purple background, White text
                     css_rule += f"{selector} {{ background-color: #9d48b1 !important; border-color: #9d48b1 !important; color: white !important; border-radius: 50% !important; }} "
                     css_rule += f"{selector} p {{ color: white !important; }} "
                 elif is_vis:
+                    # Visited but Not Answered: Red background, White text
                     css_rule += f"{selector} {{ background-color: #e55a45 !important; border-color: #e55a45 !important; color: white !important; border-radius: 0 0 50px 50px !important; }} "
                     css_rule += f"{selector} p {{ color: white !important; }} "
                 else:
-                    css_rule += f"{selector} {{ background-color: #ffffff !important; border-color: #cbd5e1 !important; color: #475569 !important; border-radius: 4px !important; }} "
-                    css_rule += f"{selector} p {{ color: #475569 !important; }} "
+                    # Not Visited: White background, Black text, Gray border
+                    css_rule += f"{selector} {{ background-color: #ffffff !important; border-color: #cbd5e1 !important; color: black !important; border-radius: 4px !important; }} "
+                    css_rule += f"{selector} p {{ color: black !important; }} "
                 
-                # 2. Current Highlight Overlay (Preserves internal shape & color)
+                # Current Highlight Overlay (Additionally show a blue border)
                 if is_curr:
-                    css_rule += f"{selector} {{ outline: 2px solid #2563eb !important; outline-offset: 2px !important; transform: scale(1.05) !important; z-index: 2; }} "
+                    css_rule += f"{selector} {{ outline: 3px solid #2563eb !important; outline-offset: 2px !important; transform: scale(1.05) !important; z-index: 2; }} "
                     
                 dynamic_css_blocks.append(css_rule)
                 
                 with grid_cols[i % 5]:
-                    # Unwrapped st.button call allows nth-of-type selector styling injection safely
                     st.button(f"{i+1}", key=f"pal_{i}", on_click=nav_goto, args=(i,))
 
-        # Push calculated individual live question styles instantly 
+        # Inject perfectly mapped CSS directly following the container block
         st.markdown(f"<style>{''.join(dynamic_css_blocks)}</style>", unsafe_allow_html=True)
                     
-        # Fixed Bottom Action Area
         st.markdown("<div style='margin-top: 15px;'></div>", unsafe_allow_html=True)
         b1, b2 = st.columns(2)
         with b1:
@@ -1070,20 +1036,16 @@ def render_exam():
             
         st.button("Submit Test", type="primary", use_container_width=True, key="btn_sub_right", on_click=nav_submit)
 
-    # ================== LEFT PANEL (Main Question Area) ==================
-    # This section is strictly left untouched as per instructions.
+    # ================== LEFT PANEL ==================
     with col_main:
         st.markdown(f"<h2 style='color:#4F46E5 !important; margin-top:0;'>{st.session_state.topic}</h2>", unsafe_allow_html=True)
         st.write("---")
         
-        # Clean double question numbers (e.g., 'Q1. Q1. Text' -> 'Q1. Text') and adjust font size
         raw_q = q_data['q']
         clean_q = re.sub(r'^[Qq]?(?:uestion)?\s*\d+[\.\)]\s*', '', raw_q)
         
-        # Render Question with 1.3rem (~20px) which is ~1.5x the size of the standard option font (~14px)
         st.markdown(f"<div style='font-size: 1.3rem; font-weight: 600; line-height: 1.6; color: #1e293b; margin-bottom: 15px;'>Q{q_idx + 1}. {clean_q}</div>", unsafe_allow_html=True)
         
-        # State-Synced Radio Implementation
         saved_ans = st.session_state.user_answers.get(q_idx)
         st.session_state[f"radio_ans_{q_idx}"] = saved_ans
 
@@ -1104,7 +1066,6 @@ def render_exam():
             
         st.write("<br><br>", unsafe_allow_html=True)
         
-        # Bottom Navigation Control Panel expanded safely to allow Marking state triggers
         b_col1, b_col2, b_col3, b_col4, b_col5, b_col6 = st.columns([1.5, 1.5, 2.5, 1.5, 1.5, 2])
         
         with b_col1:
@@ -1155,7 +1116,6 @@ def render_result():
     for i, q in enumerate(st.session_state.questions):
         st.markdown(f"**Q{i+1}: {q['q']}**")
         
-        # Safely pull correct answer based on accurate length checking
         correct_ans = q['options'][q['ans']] if 0 <= q['ans'] < len(q['options']) else "N/A"
         user_ans = st.session_state.user_answers.get(i)
         
@@ -1180,19 +1140,15 @@ def render_result():
 def main():
     init_session()
     
-    # 1. Passive time calculation before any page render executes
     passive_time_check()
     
-    # 2. Universal styling setup
     inject_custom_css()
     
-    # 3. Secure routing logic
     if not st.session_state.auth:
         render_login()
     else:
         render_sidebar()
         
-        # 4. App Engine Workflow
         if st.session_state.active_page == "Dashboard":
             render_dashboard()
         elif st.session_state.active_page == "Instructions":
@@ -1202,12 +1158,10 @@ def main():
         elif st.session_state.active_page == "Result":
             render_result()
 
-    # --- 5. PERSIST SESSION STATE ---
     if st.session_state.get("auth") and st.session_state.get("sid"):
         try:
             session_path = os.path.join(SESSION_FOLDER, f"{st.session_state.sid}.pkl")
             
-            # Whitelist of safe keys to persist (Matches default_state in init_session)
             safe_keys = [
                 'auth', 'current_user', 'questions', 'current_q', 'user_answers', 
                 'visited_questions', 'marked_questions', 'quiz_ready', 'topic', 
@@ -1216,7 +1170,6 @@ def main():
                 'current_test_filename', 'attempt_recorded', 'admin_current_path', 'sid'
             ]
             
-            # Only save the safe keys, ignoring all UI widgets
             safe_state = {k: st.session_state[k] for k in safe_keys if k in st.session_state}
             
             with open(session_path, "wb") as f:
