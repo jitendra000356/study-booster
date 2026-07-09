@@ -146,6 +146,7 @@ def init_session():
         'current_q': 0,
         'user_answers': {}, 
         'visited_questions': set(), 
+        'marked_questions': set(), # New state for marking
         'quiz_ready': False, 
         'topic': "", 
         'timer_mode': "No Timer", 
@@ -264,6 +265,7 @@ def load_quiz(file_name):
     st.session_state.current_q = 0
     st.session_state.user_answers = {}
     st.session_state.visited_questions = {0}
+    st.session_state.marked_questions = set() # Reset marks
     st.session_state.timer_mode = t_mode
     st.session_state.time_val = t_val
     st.session_state.remaining_seconds = rem_sec
@@ -313,6 +315,15 @@ def clear_answer(q_idx):
     if not st.session_state.is_paused:
         st.session_state.user_answers.pop(q_idx, None)
         st.session_state[f"radio_ans_{q_idx}"] = None
+
+def toggle_mark(q_idx):
+    """Toggles the 'Marked for Review' state for a specific question."""
+    record_activity()
+    if not st.session_state.is_paused:
+        if q_idx in st.session_state.marked_questions:
+            st.session_state.marked_questions.remove(q_idx)
+        else:
+            st.session_state.marked_questions.add(q_idx)
 
 def on_radio_change(q_idx):
     record_activity()
@@ -906,25 +917,58 @@ def render_exam():
         white-space: nowrap !important; 
     }
 
-    .cbt-btn-wrapper.cbt-answered div.stButton > button {
-        background-color: #2bc765 !important; /* Testbook Green */
-        border-color: #2bc765 !important;
-        color: white !important;
-    }
-
-    .cbt-btn-wrapper.cbt-not-answered div.stButton > button {
-        background-color: #e55a45 !important; /* Testbook Red/Orange */
-        border-color: #e55a45 !important;
-        color: white !important;
-    }
-
+    /* 1 - Not Visited */
     .cbt-btn-wrapper.cbt-not-visited div.stButton > button {
         background-color: #ffffff !important;
         border-color: #cbd5e1 !important;
         color: #475569 !important;
     }
 
-    /* Current Question Highlight */
+    /* 2 - Visited but Not Answered */
+    .cbt-btn-wrapper.cbt-not-answered div.stButton > button {
+        background-color: #e55a45 !important; /* Testbook Red/Orange */
+        border-color: #e55a45 !important;
+        color: white !important;
+    }
+
+    /* 3 - Answered */
+    .cbt-btn-wrapper.cbt-answered div.stButton > button {
+        background-color: #2bc765 !important; /* Testbook Green */
+        border-color: #2bc765 !important;
+        color: white !important;
+    }
+    
+    /* 4 - Marked for Review */
+    .cbt-btn-wrapper.cbt-marked div.stButton > button {
+        background-color: #9d48b1 !important; /* Purple */
+        border-color: #9d48b1 !important;
+        color: white !important;
+        border-radius: 50% !important; /* Circle form mimicking CBT UI */
+    }
+
+    /* 5 - Answered & Marked for Review */
+    .cbt-btn-wrapper.cbt-ans-marked div.stButton > button {
+        background-color: #9d48b1 !important; /* Purple */
+        border-color: #9d48b1 !important;
+        color: white !important;
+        border-radius: 50% !important; /* Circle form */
+        position: relative !important;
+    }
+
+    /* The green dot indicator for Answered & Marked */
+    .cbt-btn-wrapper.cbt-ans-marked div.stButton > button::after {
+        content: '';
+        position: absolute;
+        bottom: -2px;
+        right: -2px;
+        width: 10px;
+        height: 10px;
+        background-color: #2bc765;
+        border-radius: 50%;
+        border: 2px solid white;
+    }
+
+    /* 6 - Current Question Highlight (Placed at bottom to override borders properly) */
     .cbt-btn-wrapper.cbt-current div.stButton > button {
         border: 2px solid #2563eb !important;
         box-shadow: 0 0 0 3px rgba(37,99,235,0.2) !important;
@@ -954,21 +998,37 @@ def render_exam():
     # Native responsive Streamlit columns
     col_main, col_pal = st.columns([7, 3]) 
     
+    # Calculate Live Sync Statuses First
+    ans_count = 0
+    ans_marked_count = 0
+    marked_count = 0
+    not_ans_count = 0
+    not_visit_count = 0
+    
+    for i in range(total_q):
+        is_ans = st.session_state.user_answers.get(i) is not None
+        is_vis = i in st.session_state.visited_questions
+        is_mark = i in st.session_state.marked_questions
+        
+        if is_ans and is_mark:
+            ans_marked_count += 1
+        elif is_ans and not is_mark:
+            ans_count += 1
+        elif not is_ans and is_mark:
+            marked_count += 1
+        elif not is_ans and is_vis and not is_mark:
+            not_ans_count += 1
+        else:
+            not_visit_count += 1
+            
     # ================== RIGHT PANEL (Timer + Palette) ==================
     with col_pal:
         render_visual_timer()
         
-        # Calculate Legend Counts based on existing logic
-        ans_count = len(st.session_state.user_answers)
-        visited_count = len(st.session_state.visited_questions)
-        not_ans_count = visited_count - ans_count
-        not_visit_count = total_q - visited_count
-        
         username_display = st.session_state.current_user.split()[0]
         avatar_letter = username_display[0].upper() if username_display else "U"
         
-        # Testbook-style Profile & Legend Redesign
-        # Note: HTML is strictly left-aligned to prevent Streamlit's Markdown parser from mistakenly treating it as a raw code block.
+        # Testbook-style Profile & Legend Redesign securely updated with dynamic live counts
         html_legend = f"""
 <div style="background-color: #ffffff; padding: 15px; border-bottom: 1px solid #bfdbfe; margin: 10px -1.5rem 0 -1.5rem;">
 <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
@@ -983,7 +1043,7 @@ def render_exam():
 <span>Answered</span>
 </div>
 <div style="display: flex; align-items: center; gap: 4px;">
-<div style="width: 18px; height: 18px; background-color: #9d48b1; color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 10px;">0</div>
+<div style="width: 18px; height: 18px; background-color: #9d48b1; color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 10px;">{marked_count}</div>
 <span>Marked</span>
 </div>
 <div style="display: flex; align-items: center; gap: 4px;">
@@ -991,7 +1051,7 @@ def render_exam():
 <span>Not Visited</span>
 </div>
 <div style="display: flex; align-items: center; gap: 4px; grid-column: span 2;">
-<div style="width: 18px; height: 18px; background-color: #9d48b1; color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 10px; position: relative;">0<div style="position: absolute; bottom: -2px; right: -2px; width: 8px; height: 8px; background-color: #2bc765; border-radius: 50%; border: 1px solid white;"></div></div>
+<div style="width: 18px; height: 18px; background-color: #9d48b1; color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 10px; position: relative;">{ans_marked_count}<div style="position: absolute; bottom: -2px; right: -2px; width: 8px; height: 8px; background-color: #2bc765; border-radius: 50%; border: 1px solid white;"></div></div>
 <span>Marked and answered</span>
 </div>
 <div style="display: flex; align-items: center; gap: 4px;">
@@ -1026,12 +1086,18 @@ def render_exam():
             for i in range(total_q):
                 is_ans = st.session_state.user_answers.get(i) is not None
                 is_vis = i in st.session_state.visited_questions
+                is_mark = i in st.session_state.marked_questions
                 is_curr = (i == q_idx)
                 
-                # Determine class based on state exactly matching reference logic
+                # Determine class based on the fully upgraded status logic
                 wrapper_class = "cbt-btn-wrapper"
-                if is_ans:
+                
+                if is_ans and is_mark:
+                    wrapper_class += " cbt-ans-marked"
+                elif is_ans:
                     wrapper_class += " cbt-answered"
+                elif is_mark:
+                    wrapper_class += " cbt-marked"
                 elif is_vis:
                     wrapper_class += " cbt-not-answered"
                 else:
@@ -1089,26 +1155,30 @@ def render_exam():
             
         st.write("<br><br>", unsafe_allow_html=True)
         
-        # Bottom Navigation Control Panel
-        b_col1, b_col2, b_col3, b_col4, b_col5 = st.columns([2, 2, 2, 2, 2])
+        # Bottom Navigation Control Panel expanded safely to allow Marking state triggers
+        b_col1, b_col2, b_col3, b_col4, b_col5, b_col6 = st.columns([1.5, 1.5, 2.5, 1.5, 1.5, 2])
         
         with b_col1:
             st.button("⏪ Previous", on_click=nav_prev, use_container_width=True)
                 
         with b_col2:
             st.button("🧹 Clear", on_click=clear_answer, args=(q_idx,), use_container_width=True)
-                
+            
         with b_col3:
+            is_cur_marked = q_idx in st.session_state.marked_questions
+            st.button("🚩 Unmark" if is_cur_marked else "🚩 Mark for Review", on_click=toggle_mark, args=(q_idx,), use_container_width=True)
+                
+        with b_col4:
             is_last = (q_idx == total_q - 1)
             if not is_last:
                 st.button("Next ⏩", type="primary", on_click=nav_next, use_container_width=True)
             else:
                 st.button("Finish", type="secondary", disabled=True, use_container_width=True)
                     
-        with b_col4:
+        with b_col5:
             st.button("⏸ Pause", type="secondary", on_click=pause_exam, use_container_width=True)
                 
-        with b_col5:
+        with b_col6:
             st.button("🚀 Final Submit", type="primary", on_click=nav_submit, use_container_width=True)
 
 def render_result():
