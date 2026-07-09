@@ -1,4 +1,5 @@
 import streamlit as st
+import streamlit.components.v1 as components
 import csv
 import os
 import time
@@ -12,41 +13,21 @@ st.set_page_config(page_title="Study Booster", page_icon="🎓", layout="wide", 
 st.markdown("""
     <style>
     /* Compact Top Space */
-    .block-container {
-        padding-top: 1rem !important;
-        padding-bottom: 1rem !important;
-    }
-    
+    .block-container { padding-top: 1rem !important; padding-bottom: 1rem !important; }
     /* Clean App Background */
     .stApp { background-color: #F4F7FB; color: #1E293B; }
-    
     /* Buttons Customization */
-    div.stButton > button {
-        border-radius: 6px !important;
-        font-weight: 600 !important;
-        padding: 0.3rem 0.5rem !important;
-        width: 100%;
-    }
-    div.stButton > button[kind="primary"] {
-        background-color: #4F46E5 !important;
-        color: white !important;
-        border: none !important;
-    }
-    
+    div.stButton > button { border-radius: 6px !important; font-weight: 600 !important; width: 100%; }
+    div.stButton > button[kind="primary"] { background-color: #4F46E5 !important; color: white !important; }
     /* Box for Palette */
-    .palette-box {
-        background-color: white;
-        padding: 15px;
-        border-radius: 10px;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-    }
+    .palette-box { background-color: white; padding: 15px; border-radius: 10px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
     </style>
 """, unsafe_allow_html=True)
 
 CSV_FOLDER = 'saved_csvs'
 if not os.path.exists(CSV_FOLDER): os.makedirs(CSV_FOLDER)
 
-ALLOWED_USERS = {"Jiten (Admin)": "jite1996", "Jili (Student)": "jili1999", "binita (Student)": "bini1993", "Satish (Student)": "satish2004", "gaurav (Kalu)": "gaurav1997", "Arvind (student)": "arvind1994"}
+ALLOWED_USERS = {"Jiten (Admin)": "admin123", "Jili (Student)": "jili1999", "binita (Student)": "bini1993", "Satish (Student)": "satish2004", "gaurav (Kalu)": "gaurav1997", "Arvind (student)": "arvind1994"}
 
 # ==========================================
 # 2. SESSION STATE
@@ -99,7 +80,7 @@ def load_quiz(file_name, timer_mode, time_minutes):
     st.session_state.quiz_completed = False
     st.session_state.current_q = 0
     st.session_state.user_answers = {}
-    st.session_state.visited_questions = {0} # First question is visited
+    st.session_state.visited_questions = {0}
     st.session_state.timer_mode = timer_mode
     
     if timer_mode == "Total Time (Minutes)":
@@ -133,7 +114,7 @@ if menu == "📚 Dashboard":
                 st.success("Test uploaded successfully!")
                 
     st.subheader("⚙️ Exam Settings")
-    t_mode = st.radio("Timer Setup:", ["No Timer", "Total Time (Minutes)"], horizontal=True)
+    t_mode = st.radio("Timer Setup:", ["Total Time (Minutes)", "No Timer"], horizontal=True)
     t_val = 0
     if t_mode == "Total Time (Minutes)":
         t_val = st.number_input("Enter Total Time (in Minutes):", min_value=1, value=30)
@@ -151,14 +132,14 @@ if menu == "📚 Dashboard":
                 st.success("Quiz Loaded! Go to 'Live Exam' from sidebar.")
 
 # ==========================================
-# 7. LIVE EXAM (Testbook Pattern)
+# 7. LIVE EXAM (Timer + Auto Submit + Palette)
 # ==========================================
 elif menu == "📝 Live Exam":
     if not st.session_state.quiz_ready:
         st.warning("⚠️ No active test. Please load a quiz from Dashboard first.")
         st.stop()
         
-    # --- RESULT SCREEN ---
+    # --- RESULT SCREEN (WITH GRID) ---
     if st.session_state.quiz_completed:
         total_q = len(st.session_state.questions)
         attempted = len([k for k,v in st.session_state.user_answers.items() if v is not None])
@@ -171,6 +152,28 @@ elif menu == "📝 Live Exam":
         c1.metric("Total Questions", total_q)
         c2.metric("Attempted", attempted)
         c3.metric("Final Score", f"{score} / {total_q}")
+        
+        st.divider()
+        st.markdown("### 📊 Testbook Style Result Palette")
+        st.markdown("<small>✅ Correct &nbsp;&nbsp; ❌ Wrong &nbsp;&nbsp; ⚪ Skipped/Unvisited</small>", unsafe_allow_html=True)
+        st.write("")
+        
+        # Result Grid
+        res_cols = st.columns(10)
+        for i in range(total_q):
+            q_data = st.session_state.questions[i]
+            correct_ans = q_data['options'][q_data['ans']]
+            user_ans = st.session_state.user_answers.get(i)
+            
+            if user_ans == correct_ans:
+                res_icon = "✅"
+            elif user_ans is None:
+                res_icon = "⚪"
+            else:
+                res_icon = "❌"
+            
+            with res_cols[i % 10]:
+                st.markdown(f"<div style='text-align:center; padding:10px; border-radius:5px; background:white; box-shadow:0 1px 3px rgba(0,0,0,0.1);'><b>{i+1}</b><br>{res_icon}</div>", unsafe_allow_html=True)
         
         st.divider()
         st.markdown("### 📋 Detailed Answer Key")
@@ -190,7 +193,7 @@ elif menu == "📝 Live Exam":
             
     # --- ACTIVE EXAM SCREEN ---
     else:
-        # TIMING CHECK (Backend check to auto-submit)
+        # 1. Backend Python Timer Check (Failsafe)
         if st.session_state.timer_mode == "Total Time (Minutes)":
             remaining_time = st.session_state.end_time - time.time()
             if remaining_time <= 0:
@@ -202,44 +205,78 @@ elif menu == "📝 Live Exam":
         total_q = len(st.session_state.questions)
         q_data = st.session_state.questions[q_idx]
 
-        # TOP BAR: COMPACT (Topic + Live Timer)
-        top_col1, top_col2 = st.columns([3, 1])
-        with top_col1:
-            st.markdown(f"<h4 style='margin:0; padding:0; color:#4F46E5;'>{st.session_state.topic}</h4>", unsafe_allow_html=True)
-        with top_col2:
-            if st.session_state.timer_mode == "Total Time (Minutes)":
-                rem_sec = int(st.session_state.end_time - time.time())
-                # Javascript Live Timer Injection
-                timer_html = f"""
-                <div style="font-size: 1.2rem; font-weight: bold; color: #DC2626; text-align: right;">
-                    ⏳ <span id="clock"></span>
-                </div>
-                <script>
-                    var timeleft = {rem_sec};
-                    var timer = setInterval(function(){{
-                        if(timeleft <= 0){{
-                            clearInterval(timer);
-                            document.getElementById("clock").innerHTML = "TIME UP! Submitting...";
-                        }} else {{
-                            var m = Math.floor(timeleft / 60);
-                            var s = timeleft % 60;
-                            if (s < 10) {{ s = "0" + s; }}
-                            document.getElementById("clock").innerHTML = m + ":" + s + " Left";
-                        }}
-                        timeleft -= 1;
-                    }}, 1000);
-                </script>
-                """
-                st.markdown(timer_html, unsafe_allow_html=True)
-            else:
-                st.markdown("<div style='text-align: right; font-weight:bold;'>No Timer</div>", unsafe_allow_html=True)
-        
-        st.write("---")
-
-        # MAIN LAYOUT (Left: Question, Right: Palette)
+        # MAIN LAYOUT (Left: Question, Right: Palette & Timer)
         col_main, col_pal = st.columns([3, 1])
         
+        with col_pal:
+            # 2. Visible Live Timer (Javascript Component)
+            if st.session_state.timer_mode == "Total Time (Minutes)":
+                rem_sec = int(st.session_state.end_time - time.time())
+                timer_html = f"""
+                <!DOCTYPE html>
+                <html>
+                <head>
+                <style>
+                body {{ margin: 0; padding: 0; font-family: sans-serif; display: flex; justify-content: center; background: transparent; }}
+                .timer-box {{ background-color: #fee2e2; border: 2px solid #ef4444; color: #dc2626; padding: 10px; border-radius: 8px; font-size: 24px; font-weight: bold; text-align: center; width: 100%; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }}
+                </style>
+                </head>
+                <body>
+                    <div class="timer-box">⏳ <span id="time">00:00</span></div>
+                    <script>
+                        var countDownDate = new Date().getTime() + ({rem_sec} * 1000);
+                        var x = setInterval(function() {{
+                            var now = new Date().getTime();
+                            var distance = countDownDate - now;
+                            
+                            if (distance <= 0) {{
+                                clearInterval(x);
+                                document.getElementById("time").innerHTML = "TIME UP!";
+                                // Auto Click Submit Trick
+                                var buttons = window.parent.document.querySelectorAll('button');
+                                for(var i=0; i<buttons.length; i++) {{
+                                    if(buttons[i].innerText.includes('Final Submit')) {{
+                                        buttons[i].click();
+                                        break;
+                                    }}
+                                }}
+                            }} else {{
+                                var m = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
+                                var s = Math.floor((distance % (1000 * 60)) / 1000);
+                                m = m < 10 ? "0" + m : m;
+                                s = s < 10 ? "0" + s : s;
+                                document.getElementById("time").innerHTML = m + ":" + s;
+                            }}
+                        }}, 1000);
+                    </script>
+                </body>
+                </html>
+                """
+                components.html(timer_html, height=70)
+            
+            # Palette Box
+            st.markdown("<div class='palette-box'>", unsafe_allow_html=True)
+            st.markdown("<h5 style='text-align:center;'>Question Palette</h5>", unsafe_allow_html=True)
+            st.markdown("<small>🔵 Current &nbsp; 🟢 Answered <br> 🔴 Skipped &nbsp;&nbsp; ⚪ Unvisited</small>", unsafe_allow_html=True)
+            st.write("")
+            
+            grid_cols = st.columns(4)
+            for i in range(total_q):
+                if i == q_idx: icon = "🔵"
+                elif st.session_state.user_answers.get(i) is not None: icon = "🟢"
+                elif i in st.session_state.visited_questions: icon = "🔴"
+                else: icon = "⚪"
+                    
+                with grid_cols[i % 4]:
+                    if st.button(f"{icon}\n{i+1}", key=f"pal_{i}"):
+                        st.session_state.current_q = i
+                        st.rerun()
+            st.markdown("</div>", unsafe_allow_html=True)
+
         with col_main:
+            st.markdown(f"<h3 style='color:#4F46E5; margin-top:0;'>{st.session_state.topic}</h3>", unsafe_allow_html=True)
+            st.write("---")
+            
             # The Question
             st.markdown(f"#### Q{q_idx + 1}. {q_data['q']}")
             
@@ -248,9 +285,7 @@ elif menu == "📝 Live Exam":
             try: def_idx = q_data['options'].index(saved_ans)
             except: def_idx = None
             
-            # clear_key ensure karta hai ki 'Clear Response' kaam kare
             clear_key = st.session_state.get(f"clear_{q_idx}", 0)
-            
             choice = st.radio("Select your option:", q_data['options'], index=def_idx, key=f"rad_{q_idx}_{clear_key}", label_visibility="collapsed")
             if choice:
                 st.session_state.user_answers[q_idx] = choice
@@ -258,7 +293,7 @@ elif menu == "📝 Live Exam":
             st.write("")
             st.write("")
             
-            # NAVIGATION BUTTONS (Bottom)
+            # NAVIGATION BUTTONS
             b_col1, b_col2, b_col3, b_col4 = st.columns(4)
             with b_col1:
                 if st.button("⏪ Previous"):
@@ -277,31 +312,7 @@ elif menu == "📝 Live Exam":
                         st.session_state.current_q += 1
                         st.rerun()
             with b_col4:
+                # Dhyan rahe, timer Javascript issi button ko auto-click karega time zero hone par
                 if st.button("🚀 Final Submit", type="primary"):
                     st.session_state.quiz_completed = True
                     st.rerun()
-
-        with col_pal:
-            st.markdown("<div class='palette-box'>", unsafe_allow_html=True)
-            st.markdown("<h5 style='text-align:center;'>Question Palette</h5>", unsafe_allow_html=True)
-            st.markdown("<small>🔵 Current &nbsp; 🟢 Answered <br> 🔴 Skipped &nbsp;&nbsp; ⚪ Unvisited</small>", unsafe_allow_html=True)
-            st.write("")
-            
-            # GRID OF BUTTONS
-            grid_cols = st.columns(4)
-            for i in range(total_q):
-                # Status Check logic
-                if i == q_idx:
-                    icon = "🔵"
-                elif st.session_state.user_answers.get(i) is not None:
-                    icon = "🟢"
-                elif i in st.session_state.visited_questions:
-                    icon = "🔴"
-                else:
-                    icon = "⚪"
-                    
-                with grid_cols[i % 4]:
-                    if st.button(f"{icon} {i+1}", key=f"pal_{i}"):
-                        st.session_state.current_q = i
-                        st.rerun()
-            st.markdown("</div>", unsafe_allow_html=True)
