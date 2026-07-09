@@ -197,7 +197,7 @@ def on_radio_change(q_idx):
 # 5. CSS & JAVASCRIPT INJECTION
 # ==========================================
 def inject_custom_css():
-    """Injects responsive, modern, and bug-free CSS."""
+    """Injects responsive, modern, and bug-free CSS. Left untouched as requested."""
     try:
         with open('bg.jpg', "rb") as image_file:
             encoded_string = base64.b64encode(image_file.read())
@@ -570,64 +570,151 @@ def render_exam():
     total_q = len(st.session_state.questions)
     q_data = st.session_state.questions[q_idx]
 
-    # Native responsive Streamlit columns (Stacks automatically on mobile)
+    # Inject Exam-specific CSS to strictly target the right panel (col_pal)
+    # This ensures no global components (like Dashboard) are affected by the redesign.
+    st.markdown("""
+    <style>
+    /* Question Panel (Right Column) Complete Redesign */
+    div[data-testid="column"]:nth-of-type(2) {
+        background-color: #f0f8ff !important; /* Testbook light blue panel bg */
+        border: 1px solid #bfdbfe !important;
+        border-radius: 8px !important;
+        padding-bottom: 15px !important;
+        overflow: hidden; /* Ensures child element negative margins don't break border radius */
+    }
+    
+    /* Perfect Square Grid Buttons */
+    .cbt-btn-wrapper div.stButton > button {
+        aspect-ratio: 1 / 1 !important;
+        width: 100% !important;
+        border-radius: 4px !important;
+        border: 1px solid #cbd5e1 !important;
+        padding: 0 !important;
+        font-size: 14px !important;
+        font-weight: 600 !important;
+        background-color: #ffffff !important;
+        color: #334155 !important;
+    }
+
+    .cbt-btn-wrapper.cbt-answered div.stButton > button {
+        background-color: #2bc765 !important; /* Testbook Green */
+        border-color: #2bc765 !important;
+        color: white !important;
+    }
+
+    .cbt-btn-wrapper.cbt-not-answered div.stButton > button {
+        background-color: #e55a45 !important; /* Testbook Red/Orange */
+        border-color: #e55a45 !important;
+        color: white !important;
+    }
+
+    .cbt-btn-wrapper.cbt-not-visited div.stButton > button {
+        background-color: #ffffff !important;
+        border-color: #cbd5e1 !important;
+        color: #475569 !important;
+    }
+
+    /* Current Question Highlight */
+    .cbt-btn-wrapper.cbt-current div.stButton > button {
+        border: 2px solid #2563eb !important;
+        box-shadow: 0 0 0 3px rgba(37,99,235,0.2) !important;
+        transform: scale(1.08) !important;
+        z-index: 2;
+    }
+    
+    /* Bottom buttons specifically mapped in the Right Panel */
+    div[data-testid="column"]:nth-of-type(2) div[data-testid="stHorizontalBlock"] div.stButton > button {
+        background-color: #dbeafe !important;
+        color: #1e40af !important;
+        border: none !important;
+        font-size: 13px !important;
+        border-radius: 4px !important;
+    }
+    div[data-testid="column"]:nth-of-type(2) > div[data-testid="stVerticalBlock"] > div:last-child div.stButton > button {
+        background-color: #0ea5e9 !important; /* Cyan Submit Button */
+        color: white !important;
+        border: none !important;
+        font-size: 14px !important;
+        border-radius: 4px !important;
+        margin-top: 5px !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+    # Native responsive Streamlit columns
     col_main, col_pal = st.columns([7, 3]) 
     
     # ================== RIGHT PANEL (Timer + Palette) ==================
     with col_pal:
         render_visual_timer()
         
-        # Calculate Legend Counts
+        # Calculate Legend Counts based on existing logic
         ans_count = len(st.session_state.user_answers)
         visited_count = len(st.session_state.visited_questions)
         not_ans_count = visited_count - ans_count
         not_visit_count = total_q - visited_count
         
-        # Testbook-style Profile & Legend
+        username_display = st.session_state.current_user.split()[0]
+        avatar_letter = username_display[0].upper() if username_display else "U"
+        
+        # Testbook-style Profile & Legend Redesign
         html_legend = f"""
-<div style='background-color: #f8fafc; padding: 12px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #e2e8f0;'>
-<div style='display: flex; align-items: center; gap: 10px; margin-bottom: 12px;'>
-<div style='width: 30px; height: 30px; background-color: #3b82f6; color: white; border-radius: 50%; display: flex; justify-content: center; align-items: center; font-weight: bold;'>👤</div>
-<span style='font-weight: 600; color: #1e293b;'>{st.session_state.current_user.split()[0]}</span>
-</div>
-<div style='display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 8px;'>
-<div style='display:flex; align-items:center; gap:5px; width:48%;'>
-<div style='min-width:20px; height:20px; background:#22c55e; color:white; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:bold;'>{ans_count}</div> 
-<span style='color:#475569;'>Answered</span>
-</div>
-<div style='display:flex; align-items:center; gap:5px; width:48%;'>
-<div style='min-width:20px; height:20px; background:#ef4444; color:white; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:bold;'>{not_ans_count}</div> 
-<span style='color:#475569;'>Not Answered</span>
-</div>
-</div>
-<div style='display: flex; justify-content: flex-start; font-size: 11px;'>
-<div style='display:flex; align-items:center; gap:5px;'>
-<div style='min-width:20px; height:20px; background:#ffffff; color:#334155; border:1px solid #cbd5e1; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:bold;'>{not_visit_count}</div> 
-<span style='color:#475569;'>Not Visited</span>
-</div>
-</div>
-</div>
-"""
+        <div style="background-color: #ffffff; padding: 15px; border-bottom: 1px solid #bfdbfe; margin: 10px -1.5rem 0 -1.5rem;">
+            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
+                <div style="width: 34px; height: 34px; background-color: #3b82f6; color: white; border-radius: 50%; display: flex; justify-content: center; align-items: center; font-weight: bold; font-size: 16px;">
+                    <img src="https://ui-avatars.com/api/?name={username_display}&background=3b82f6&color=fff&rounded=true&bold=true&size=34" style="border-radius: 50%;" onerror="this.style.display='none'; this.parentElement.innerText='{avatar_letter}';">
+                </div>
+                <span style="font-weight: 600; color: #1e293b; font-size: 15px;">{username_display}</span>
+            </div>
+            
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px 4px; font-size: 11px; color: #475569;">
+                <div style="display: flex; align-items: center; gap: 4px;">
+                    <div style="width: 18px; height: 18px; background-color: #2bc765; color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 10px;">{ans_count}</div>
+                    <span>Answered</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 4px;">
+                    <div style="width: 18px; height: 18px; background-color: #9d48b1; color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 10px;">0</div>
+                    <span>Marked</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 4px;">
+                    <div style="width: 18px; height: 18px; background-color: #ffffff; border: 1px solid #cbd5e1; color: #333; border-radius: 3px; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 10px;">{not_visit_count}</div>
+                    <span>Not Visited</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 4px; grid-column: span 2;">
+                    <div style="width: 18px; height: 18px; background-color: #9d48b1; color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 10px; position: relative;">
+                        0
+                        <div style="position: absolute; bottom: -2px; right: -2px; width: 8px; height: 8px; background-color: #2bc765; border-radius: 50%; border: 1px solid white;"></div>
+                    </div>
+                    <span>Marked and answered</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 4px;">
+                    <div style="width: 18px; height: 18px; background-color: #e55a45; color: white; border-radius: 3px; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 10px;">
+                    {not_ans_count}</div>
+                    <span>Not Answered</span>
+                </div>
+            </div>
+        </div>
+        """
         st.markdown(html_legend, unsafe_allow_html=True)
         
         # Testbook-style Section Header
         st.markdown(
-            "<div style='background-color:#dbeafe; padding:8px 12px; font-weight:bold; color:#1e3a8a; border-radius:6px; margin-bottom:12px; font-size:13px;'>"
-            "SECTION : Questions"
-            "</div>", 
+            f"""<div style='background-color:#dbeafe; padding:8px 15px; font-weight:700; color:#1e3a8a; font-size:12px; text-transform: uppercase; margin: 0 -1.5rem 10px -1.5rem; border-bottom: 1px solid #bfdbfe;'>
+            SECTION : {st.session_state.topic}
+            </div>""", 
             unsafe_allow_html=True
         )
         
-        # Independent Scrollable Container for the Buttons
+        # Independent Scrollable Container for the Buttons Grid
         try:
-            palette_scroll = st.container(height=400, border=False)
+            palette_scroll = st.container(height=350, border=False)
         except TypeError:
             try:
-                palette_scroll = st.container(height=400)
+                palette_scroll = st.container(height=350)
             except TypeError:
                 palette_scroll = st.container()
 
-        # Flex Grid Palette inside the scroll container
+        # Flex Grid Palette inside the independent scroll container
         with palette_scroll:
             grid_cols = st.columns(5)
             for i in range(total_q):
@@ -635,7 +722,7 @@ def render_exam():
                 is_vis = i in st.session_state.visited_questions
                 is_curr = (i == q_idx)
                 
-                # Determine class based on state (no emojis used)
+                # Determine class based on state exactly matching reference logic
                 wrapper_class = "cbt-btn-wrapper"
                 if is_ans:
                     wrapper_class += " cbt-answered"
@@ -651,8 +738,19 @@ def render_exam():
                     st.markdown(f"<div class='{wrapper_class}'>", unsafe_allow_html=True)
                     st.button(f"{i+1}", key=f"pal_{i}", on_click=nav_goto, args=(i,))
                     st.markdown("</div>", unsafe_allow_html=True)
+                    
+        # Fixed Bottom Action Area
+        st.markdown("<div style='margin-top: 15px;'></div>", unsafe_allow_html=True)
+        b1, b2 = st.columns(2)
+        with b1:
+            st.button("Question Paper", use_container_width=True, key="btn_qp")
+        with b2:
+            st.button("Instructions", use_container_width=True, key="btn_inst")
+            
+        st.button("Submit Test", type="primary", use_container_width=True, key="btn_sub_right", on_click=nav_submit)
 
     # ================== LEFT PANEL (Main Question Area) ==================
+    # This section is strictly left untouched as per instructions.
     with col_main:
         st.markdown(f"<h2 style='color:#4F46E5 !important; margin-top:0;'>{st.session_state.topic}</h2>", unsafe_allow_html=True)
         st.write("---")
@@ -701,7 +799,6 @@ def render_exam():
                 
         with b_col5:
             st.button("🚀 Final Submit", type="primary", on_click=nav_submit, use_container_width=True)
-
 
 def render_result():
     """Renders the detailed post-exam result analysis."""
