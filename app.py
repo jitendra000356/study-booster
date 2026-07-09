@@ -4,6 +4,7 @@ import csv
 import os
 import time
 import base64
+import re
 
 # ==========================================
 # 1. CONFIGURATION & CONSTANTS
@@ -597,6 +598,17 @@ def render_exam():
         min-width: 0 !important; /* Forces uniform shape */
         min-height: 0 !important; /* Forces uniform shape */
         line-height: 1 !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+    }
+
+    /* FORCES NUMBERS TO STAY IN A SINGLE LINE */
+    .cbt-btn-wrapper div.stButton > button p {
+        margin: 0 !important;
+        padding: 0 !important;
+        font-size: 13px !important;
+        white-space: nowrap !important; 
     }
 
     .cbt-btn-wrapper.cbt-answered div.stButton > button {
@@ -754,7 +766,12 @@ def render_exam():
         st.markdown(f"<h2 style='color:#4F46E5 !important; margin-top:0;'>{st.session_state.topic}</h2>", unsafe_allow_html=True)
         st.write("---")
         
-        st.markdown(f"<h3 style='line-height: 1.6;'>Q{q_idx + 1}. {q_data['q']}</h3>", unsafe_allow_html=True)
+        # Clean double question numbers (e.g., 'Q1. Q1. Text' -> 'Q1. Text') and adjust font size
+        raw_q = q_data['q']
+        clean_q = re.sub(r'^[Qq]?(?:uestion)?\s*\d+[\.\)]\s*', '', raw_q)
+        
+        # Render Question with 1.3rem (~20px) which is ~1.5x the size of the standard option font (~14px)
+        st.markdown(f"<div style='font-size: 1.3rem; font-weight: 600; line-height: 1.6; color: #1e293b; margin-bottom: 15px;'>Q{q_idx + 1}. {clean_q}</div>", unsafe_allow_html=True)
         
         # State-Synced Radio Implementation
         saved_ans = st.session_state.user_answers.get(q_idx)
