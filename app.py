@@ -22,6 +22,7 @@ if not os.path.exists(CSV_FOLDER):
     os.makedirs(CSV_FOLDER)
 
 ATTEMPTS_FILE = 'attempts_data.json'
+TIMERS_FILE = 'timers_data.json'
 
 # Existing Authentication mapping
 ALLOWED_USERS = {
@@ -36,8 +37,10 @@ ALLOWED_USERS = {
 }
 
 # ==========================================
-# ATTEMPT MANAGEMENT FUNCTIONS
+# DATA MANAGEMENT FUNCTIONS
 # ==========================================
+
+# -- Attempts Logic --
 def load_attempts_data():
     if not os.path.exists(ATTEMPTS_FILE):
         return {}
@@ -81,6 +84,20 @@ def record_attempt_usage():
         if user and test_file:
             increment_attempt(user, test_file)
         st.session_state.attempt_recorded = True
+
+# -- Timers Logic --
+def load_timers_data():
+    if not os.path.exists(TIMERS_FILE):
+        return {}
+    with open(TIMERS_FILE, 'r') as f:
+        try:
+            return json.load(f)
+        except:
+            return {}
+
+def save_timers_data(data):
+    with open(TIMERS_FILE, 'w') as f:
+        json.dump(data, f, indent=4)
 
 # ==========================================
 # 2. STATE INITIALIZATION
@@ -167,8 +184,8 @@ def record_activity():
 # ==========================================
 # 4. EXAM CONTROL & LOGIC FUNCTIONS
 # ==========================================
-def load_quiz(file_name, timer_mode, time_minutes):
-    """Parses CSV correctly, filtering empty options, and resets exam state."""
+def load_quiz(file_name):
+    """Parses CSV correctly, filtering empty options, applies stored timer settings, and resets exam state."""
     st.session_state.questions = []
     file_path = os.path.join(CSV_FOLDER, file_name)
     
@@ -188,14 +205,32 @@ def load_quiz(file_name, timer_mode, time_minutes):
                 'ans': int(row['Answer']) - 1
             })
             
+    # Apply Admin Configured Timer Settings
+    timers_data = load_timers_data()
+    t_config = timers_data.get(file_name, {"mode": "Total Time", "value": 30}) # Default to 30 mins
+    
+    if t_config["mode"] == "No Timer":
+        t_mode = "No Timer"
+        t_val = 0
+        rem_sec = 0
+    elif t_config["mode"] == "Per Question":
+        t_mode = "Total Time (Minutes)" # We disguise it as Total Time so the existing visual timer works flawlessly
+        total_seconds = len(st.session_state.questions) * t_config["value"]
+        t_val = round(total_seconds / 60, 2)
+        rem_sec = total_seconds
+    else: # Total Time
+        t_mode = "Total Time (Minutes)"
+        t_val = t_config["value"]
+        rem_sec = t_val * 60
+            
     st.session_state.topic = os.path.splitext(file_name)[0].replace("_", " ")
     st.session_state.quiz_ready = True
     st.session_state.current_q = 0
     st.session_state.user_answers = {}
     st.session_state.visited_questions = {0}
-    st.session_state.timer_mode = timer_mode
-    st.session_state.time_val = time_minutes
-    st.session_state.remaining_seconds = time_minutes * 60
+    st.session_state.timer_mode = t_mode
+    st.session_state.time_val = t_val
+    st.session_state.remaining_seconds = rem_sec
     st.session_state.is_paused = False
     
     # Store test info for accurate attempt recording
@@ -529,27 +564,97 @@ def render_sidebar():
 def render_dashboard():
     """Renders the main dashboard for loading and starting tests."""
     st.markdown("<h1 style='color: #1e293b;'>Welcome to Study Booster! 🚀</h1>", unsafe_allow_html=True)
-    st.markdown("<p style='font-size: 1.1rem; color: #475569;'>Select and configure your test settings below before starting.</p>", unsafe_allow_html=True)
+    st.markdown("<p style='font-size: 1.1rem; color: #475569;'>Select a test series below to begin.</p>", unsafe_allow_html=True)
     st.write("---")
     
     if "Admin" in st.session_state.current_user:
-        with st.expander("⚙️ Admin Panel: Upload New Quiz File", expanded=False):
+        
+        # --- FEATURE 1: CSV MANAGEMENT ADMIN PANEL ---
+        with st.expander("📁 Admin Panel: CSV Management", expanded=False):
+            st.markdown("#### 📤 Upload New CSV")
             uploaded_file = st.file_uploader("Upload CSV Format File", type=['csv'])
             if uploaded_file:
-                with open(os.path.join(CSV_FOLDER, uploaded_file.name), "wb") as f: 
-                    f.write(uploaded_file.getbuffer())
-                st.success("✅ Test uploaded successfully! It is now available below.")
+                save_path = os.path.join(CSV_FOLDER, uploaded_file.name)
+                if os.path.exists(save_path):
+                    st.error(f"File '{uploaded_file.name}' already exists. Please delete it first or rename your file.")
+                else:
+                    with open(save_path, "wb") as f:
+                        f.write(uploaded_file.getbuffer())
+                    st.success("✅ Test uploaded successfully!")
+                    time.sleep(1)
+                    st.rerun()
+            
+            st.markdown("#### 📋 Available CSV Files")
+            all_tests_admin = [f for f in os.listdir(CSV_FOLDER) if f.endswith('.csv')]
+            if not all_tests_admin:
+                st.info("No CSV files found.")
+            else:
+                for f_name in all_tests_admin:
+                    file_p = os.path.join(CSV_FOLDER, f_name)
+                    f_size = os.path.getsize(file_p) / 1024 # KB Size
+                    
+                    # Fast calculate Total Questions
+                    q_cnt = 0
+                    with open(file_p, 'r', encoding='utf-8-sig', errors='ignore') as f:
+                        q_cnt = sum(1 for _ in f) - 1 # Subtract Header
+                    
+                    c1, c2, c3 = st.columns([4, 2, 2])
+                    c1.markdown(f"**{f_name}**")
+                    c2.markdown(f"Questions: {q_cnt} | Size: {f_size:.1f} KB")
+                    c3.markdown("")
                 
-        # --- NEW ATTEMPT MANAGEMENT ADMIN PANEL ---
+                st.markdown("#### 🗑️ Delete CSV")
+                del_file = st.selectbox("Select file to delete", ["-- Select --"] + all_tests_admin)
+                if del_file != "-- Select --":
+                    if st.checkbox(f"Are you sure you want to delete {del_file}?"):
+                        if st.button("Yes, Delete Test", type="primary"):
+                            os.remove(os.path.join(CSV_FOLDER, del_file))
+                            st.success(f"Deleted {del_file}!")
+                            time.sleep(1)
+                            st.rerun()
+
+        # --- FEATURE 2: TIMER MANAGEMENT ADMIN PANEL ---
+        with st.expander("⏱️ Admin Panel: Timer Management", expanded=False):
+            st.markdown("Configure timer rules for each test individually.")
+            all_tests_admin_tmr = [f for f in os.listdir(CSV_FOLDER) if f.endswith('.csv')]
+            
+            if all_tests_admin_tmr:
+                t_file = st.selectbox("Select Test to Configure Timer", all_tests_admin_tmr, key="tmr_test")
+                if t_file:
+                    timers_data = load_timers_data()
+                    current_settings = timers_data.get(t_file, {"mode": "Total Time", "value": 30})
+                    
+                    new_mode = st.radio(
+                        "Timer Mode", 
+                        ["Total Time", "Per Question", "No Timer"], 
+                        index=["Total Time", "Per Question", "No Timer"].index(current_settings["mode"])
+                    )
+                    new_val = current_settings.get("value", 30)
+                    
+                    if new_mode == "Total Time":
+                        new_val = st.number_input("Total Minutes", min_value=1, value=new_val if current_settings["mode"] == "Total Time" else 30)
+                    elif new_mode == "Per Question":
+                        new_val = st.number_input("Seconds per Question", min_value=1, value=new_val if current_settings["mode"] == "Per Question" else 45)
+                    else:
+                        new_val = 0 # No Timer
+                    
+                    if st.button("Save Timer Settings", type="primary"):
+                        timers_data[t_file] = {"mode": new_mode, "value": new_val}
+                        save_timers_data(timers_data)
+                        st.success(f"✅ Timer settings saved for {t_file}!")
+            else:
+                st.info("No tests available to configure.")
+
+        # --- ATTEMPT MANAGEMENT ADMIN PANEL ---
         with st.expander("⚙️ Admin Panel: Attempt Management", expanded=False):
             st.markdown("Select a user and a test to modify attempt limits.")
             a_col1, a_col2 = st.columns(2)
             with a_col1:
                 sel_user = st.selectbox("Select User", list(ALLOWED_USERS.keys()), key="adm_user")
             with a_col2:
-                all_tests_admin = [f for f in os.listdir(CSV_FOLDER) if f.endswith('.csv')]
-                if all_tests_admin:
-                    sel_test = st.selectbox("Select Test", all_tests_admin, key="adm_test")
+                all_tests_admin_att = [f for f in os.listdir(CSV_FOLDER) if f.endswith('.csv')]
+                if all_tests_admin_att:
+                    sel_test = st.selectbox("Select Test", all_tests_admin_att, key="adm_test")
                 else:
                     sel_test = None
             
@@ -560,16 +665,9 @@ def render_dashboard():
                     set_allowed_attempts(sel_user, sel_test, new_limit)
                     st.success(f"✅ Updated! {sel_user.split()[0]} now has {new_limit} allowed attempts for {sel_test.replace('.csv', '').replace('_', ' ')}.")
     
-    col_settings, col_tests = st.columns([1, 1.5])
+    # --- STUDENTS VIEW (DASHBOARD TESTS LIST) ---
+    col_space1, col_tests, col_space2 = st.columns([1, 4, 1])
     
-    with col_settings:
-        st.markdown("### ⏱️ Exam Settings")
-        with st.container(border=True):
-            t_mode = st.radio("Timer Setup:", ["Total Time (Minutes)", "No Timer"], horizontal=True)
-            t_val = 0
-            if t_mode == "Total Time (Minutes)": 
-                t_val = st.number_input("Enter Total Duration (in Minutes):", min_value=1, value=30, step=5)
-            
     with col_tests:
         st.markdown("### 📋 Available Test Series")
         files = [f for f in os.listdir(CSV_FOLDER) if f.endswith('.csv')]
@@ -593,7 +691,7 @@ def render_dashboard():
                     
                     if remaining > 0:
                         if c2.button("Load Test", key=f"load_{file}"):
-                            load_quiz(file, t_mode, t_val)
+                            load_quiz(file)
                     else:
                         c2.button("Limit Reached", key=f"limit_{file}", disabled=True, help="You have reached the maximum number of attempts allowed for this test. Please contact the administrator.")
                         
@@ -618,7 +716,13 @@ def render_instructions():
         with st.container(border=True):
             st.markdown("### Please read carefully before starting:")
             st.markdown(f"🔹 **Total Questions:** {len(st.session_state.questions)}")
-            st.markdown(f"🔹 **Time Limit:** {'No Time Limit' if st.session_state.timer_mode == 'No Timer' else f'{st.session_state.time_val} Minutes'}")
+            
+            # Format time display dynamically 
+            time_display_str = "No Time Limit"
+            if st.session_state.timer_mode != "No Timer":
+                time_display_str = f"{st.session_state.time_val} Minutes"
+
+            st.markdown(f"🔹 **Time Limit:** {time_display_str}")
             st.markdown("""
             🔹 **Navigation:** You can jump to any question using the Question Palette on the right.
             🔹 **Auto-Pause:** If you become completely inactive for **5 minutes**, the exam will pause itself to save your time safely.
