@@ -7,11 +7,10 @@ import base64
 from datetime import datetime
 
 # ==========================================
-# 1. PAGE CONFIGURATION & FIX-SCROLL CSS
+# 1. PAGE CONFIGURATION & SUPER STICKY CSS
 # ==========================================
 st.set_page_config(page_title="Study Booster", page_icon="🎓", layout="wide", initial_sidebar_state="collapsed")
 
-# 🖼️ Background Image Function
 def add_bg_from_local(image_file):
     try:
         with open(image_file, "rb") as image_file:
@@ -25,7 +24,6 @@ def add_bg_from_local(image_file):
                 background-position: center;
                 background-attachment: fixed;
             }}
-            /* Content text readability filter */
             .stApp > header {{ background-color: transparent !important; }}
             div[data-testid="stVerticalBlock"] > div {{
                 background-color: rgba(255, 255, 255, 0.94);
@@ -41,44 +39,29 @@ def add_bg_from_local(image_file):
 
 add_bg_from_local('bg.jpg') 
 
-# 🛠️ ULTRA-PRO STICKY & SCROLL CONTAINER CSS
+# 🛠️ REAL STICKY CSS (Streamlit Layout Override)
 st.markdown("""
     <style>
     .block-container { padding-top: 1rem !important; padding-bottom: 1rem !important; }
     div.stButton > button { border-radius: 6px !important; font-weight: 600 !important; width: 100%; }
     div.stButton > button[kind="primary"] { background-color: #4F46E5 !important; color: white !important; }
     
-    /* 📌 FIXED RIGHT COLUMN: Timer aur Palette ko screen par chipka ke rakhega */
-    div[data-testid="stColumn"]:nth-child(2) {
-        position: -webkit-sticky;
-        position: sticky;
-        top: 20px;
-        align-self: start;
-        z-index: 99;
+    /* 📌 STICKY COLUMN FIX: Streamlit ke default layout ko force karna */
+    section[data-testid="stMain"] .block-container {
+        overflow: visible !important;
     }
-    
-    /* 🔄 INDEPENDENT PALETTE SCROLL: Sirf boxes wale dibbe me scroll bar aayega */
-    .palette-box {
-        background-color: white;
-        padding: 15px;
-        border-radius: 10px;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-        max-height: 380px;       /* Fixed height taaki screen se bahar na jaye */
-        overflow-y: auto;        /* Swatantra (Independent) Scrolling */
-        border: 1px solid #E2E8F0;
+    div[data-testid="column"]:nth-of-type(2) {
+        position: -webkit-sticky !important;
+        position: sticky !important;
+        top: 60px !important;
+        align-self: flex-start !important;
+        z-index: 999 !important;
     }
-    
-    /* Scrollbar ko thoda patla aur professional banana */
-    .palette-box::-webkit-scrollbar { width: 6px; }
-    .palette-box::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 10px; }
-    .palette-box::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
-    .palette-box::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
     </style>
 """, unsafe_allow_html=True)
 
 CSV_FOLDER = 'saved_csvs'
 if not os.path.exists(CSV_FOLDER): os.makedirs(CSV_FOLDER)
-
 ALLOWED_USERS = {"Jiten (Admin)": "admin123", "Rahul (Student)": "rahul2026"}
 
 # ==========================================
@@ -138,24 +121,8 @@ def load_quiz(file_name, timer_mode, time_minutes):
     st.session_state.timer_mode = timer_mode
     st.session_state.time_val = time_minutes
 
-def generate_report(score, total):
-    report = f"🎓 STUDY BOOSTER - OFFICIAL REPORT CARD 🎓\n"
-    report += f"Candidate: {st.session_state.current_user}\n"
-    report += f"Subject: {st.session_state.topic}\n"
-    report += f"Date: {datetime.now().strftime('%d-%b-%Y %I:%M %p')}\n"
-    report += "="*40 + "\n"
-    report += f"SCORE: {score} out of {total}\n"
-    report += "="*40 + "\n\n--- DETAILED ANSWER KEY ---\n"
-    for i, q in enumerate(st.session_state.questions):
-        report += f"Q{i+1}: {q['q']}\n"
-        user_ans = st.session_state.user_answers.get(i, "Not Attempted")
-        correct_ans = q['options'][q['ans']]
-        report += f"Your Answer: {user_ans}\n"
-        report += f"Correct Answer: {correct_ans}\n\n"
-    return report
-
 # ==========================================
-# 5. SIDEBAR
+# 5. DASHBOARD & SIDEBAR
 # ==========================================
 st.sidebar.markdown(f"### 👤 {st.session_state.current_user}")
 st.sidebar.divider()
@@ -165,12 +132,8 @@ if st.sidebar.button("🚪 Logout", type="secondary"):
     st.session_state.auth = False
     st.rerun()
 
-# ==========================================
-# 6. DASHBOARD
-# ==========================================
 if menu == "📚 Dashboard":
     st.header("Welcome to Study Booster! 🚀")
-    
     if "Admin" in st.session_state.current_user:
         with st.expander("➕ Upload New Quiz File"):
             uploaded_file = st.file_uploader("Upload CSV", type=['csv'])
@@ -198,85 +161,43 @@ if menu == "📚 Dashboard":
                 st.success("Quiz Loaded! Go to 'Live Exam' from sidebar to read instructions.")
 
 # ==========================================
-# 7. LIVE EXAM MODULE
+# 6. LIVE EXAM MODULE
 # ==========================================
 elif menu == "📝 Live Exam":
     if not st.session_state.quiz_ready:
         st.warning("⚠️ No active test. Please load a quiz from Dashboard first.")
         st.stop()
         
-    # --- PHASE 1: INSTRUCTIONS PAGE ---
+    # --- PHASE 1: INSTRUCTIONS ---
     if not st.session_state.exam_started:
         st.header(f"📜 Instructions: {st.session_state.topic}")
         st.divider()
-        st.markdown(f"""
-        ### Please read the following instructions carefully:
-        1. **Total Questions:** There are **{len(st.session_state.questions)}** multiple-choice questions.
-        2. **Time Limit:** {f"**{st.session_state.time_val} Minutes**" if st.session_state.timer_mode == "Total Time (Minutes)" else "**No Time Limit**"}.
-        3. **Navigation:** You can jump to any question using the Question Palette on the right.
-        4. **Marking Scheme:** Every correct answer adds to your score. There is no negative marking.
-        5. **Auto Submit:** The exam will automatically submit when the timer hits zero. 
-        6. **Do NOT refresh** the page while taking the exam.
-        """)
-        st.write("")
-        c1, c2, c3 = st.columns([1, 1, 1])
-        with c2:
-            if st.button("✅ I am ready to begin", type="primary"):
-                st.session_state.exam_started = True
-                if st.session_state.timer_mode == "Total Time (Minutes)":
-                    st.session_state.end_time = time.time() + (st.session_state.time_val * 60)
-                st.rerun()
+        st.markdown(f"1. **Total Questions:** {len(st.session_state.questions)}\n2. **Time Limit:** {st.session_state.time_val} Mins\n3. **Auto Submit:** Exam submits when timer hits zero.")
+        if st.button("✅ I am ready to begin", type="primary"):
+            st.session_state.exam_started = True
+            if st.session_state.timer_mode == "Total Time (Minutes)":
+                st.session_state.end_time = time.time() + (st.session_state.time_val * 60)
+            st.rerun()
         st.stop()
         
     # --- PHASE 2: RESULT SCREEN ---
     if st.session_state.quiz_completed:
         total_q = len(st.session_state.questions)
-        attempted = len([k for k,v in st.session_state.user_answers.items() if v is not None])
         score = sum(1 for i, q in enumerate(st.session_state.questions) if st.session_state.user_answers.get(i) == q['options'][q['ans']])
-        
         st.header("🏆 Performance Analysis")
-        st.success("Exam submitted successfully!")
-        
-        c1, c2, c3 = st.columns(3)
-        c1.metric("Total Questions", total_q)
-        c2.metric("Attempted", attempted)
-        c3.metric("Final Score", f"{score} / {total_q}")
-        
-        st.divider()
-        st.markdown("### 📊 Testbook Style Result Palette")
-        st.markdown("<small>✅ Correct &nbsp;&nbsp; ❌ Wrong &nbsp;&nbsp; ⚪ Skipped/Unvisited</small>", unsafe_allow_html=True)
-        st.write("")
-        
-        res_cols = st.columns(10)
-        for i in range(total_q):
-            q_data = st.session_state.questions[i]
-            correct_ans = q_data['options'][q_data['ans']]
-            user_ans = st.session_state.user_answers.get(i)
-            
-            if user_ans == correct_ans: res_icon = "✅"
-            elif user_ans is None: res_icon = "⚪"
-            else: res_icon = "❌"
-            
-            with res_cols[i % 10]:
-                st.markdown(f"<div style='text-align:center; padding:10px; border-radius:5px; background:white; border:1px solid #ddd;'><b>{i+1}</b><br>{res_icon}</div>", unsafe_allow_html=True)
-        
+        st.metric("Final Score", f"{score} / {total_q}")
         st.divider()
         st.markdown("### 📋 Detailed Answer Key")
         for i, q in enumerate(st.session_state.questions):
             st.markdown(f"**Q{i+1}: {q['q']}**")
             correct_ans = q['options'][q['ans']]
             user_ans = st.session_state.user_answers.get(i)
+            if user_ans == correct_ans: st.success(f"Your: {user_ans} (✅)")
+            elif user_ans is None: st.warning(f"Not Attempted. Correct: {correct_ans}")
+            else: st.error(f"Your: {user_ans} (❌) | Correct: {correct_ans}")
+        st.stop()
             
-            if user_ans == correct_ans:
-                st.success(f"Your Answer: {user_ans} (✅ Correct)")
-            elif user_ans is None:
-                st.warning(f"Not Attempted. Correct Answer: {correct_ans}")
-            else:
-                st.error(f"Your Answer: {user_ans} (❌ Wrong)")
-                st.info(f"Correct Answer: {correct_ans}")
-            st.write("---")
-            
-    # --- PHASE 3: ACTIVE EXAM SCREEN (FIXED SCROLL LAYOUT) ---
+    # --- PHASE 3: ACTIVE EXAM (FIXED SCROLL LAYOUT) ---
     else:
         if st.session_state.timer_mode == "Total Time (Minutes)":
             remaining_time = st.session_state.end_time - time.time()
@@ -289,37 +210,28 @@ elif menu == "📝 Live Exam":
         total_q = len(st.session_state.questions)
         q_data = st.session_state.questions[q_idx]
 
-        # 2 Column layout
         col_main, col_pal = st.columns([3, 1])
         
-        # RIGHT PANEL: Timer + Palette Box (Ab ye page ke sath scroll nahi hoga!)
+        # 📌 RIGHT PANEL (Sticky + Native Scrollbar)
         with col_pal:
             if st.session_state.timer_mode == "Total Time (Minutes)":
                 rem_sec = int(st.session_state.end_time - time.time())
                 timer_html = f"""
                 <!DOCTYPE html>
-                <html>
-                <head>
-                <style>
-                body {{ margin: 0; padding: 5px; font-family: sans-serif; display: flex; justify-content: center; align-items: center; background: transparent; overflow: hidden; }}
-                .timer-box {{ background-color: #fee2e2; border: 2px solid #ef4444; color: #dc2626; padding: 8px 0; border-radius: 8px; font-size: 22px; font-weight: bold; text-align: center; width: 100%; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }}
-                </style>
-                </head>
-                <body>
+                <html><head><style>
+                body {{ margin:0; padding:5px; font-family:sans-serif; display:flex; justify-content:center; align-items:center; background:transparent; }}
+                .timer-box {{ background-color:#fee2e2; border:2px solid #ef4444; color:#dc2626; padding:8px 0; border-radius:8px; font-size:22px; font-weight:bold; text-align:center; width:100%; box-shadow:0 4px 6px -1px rgba(0,0,0,0.1); }}
+                </style></head><body>
                     <div class="timer-box">⏳ <span id="time">00:00</span></div>
                     <script>
                         var countDownDate = new Date().getTime() + ({rem_sec} * 1000);
                         var x = setInterval(function() {{
                             var now = new Date().getTime();
                             var distance = countDownDate - now;
-                            
                             if (distance <= 0) {{
-                                clearInterval(x);
-                                document.getElementById("time").innerHTML = "TIME UP!";
+                                clearInterval(x); document.getElementById("time").innerHTML = "TIME UP!";
                                 var buttons = window.parent.document.querySelectorAll('button');
-                                for(var i=0; i<buttons.length; i++) {{
-                                    if(buttons[i].innerText.includes('Final Submit')) {{ buttons[i].click(); break; }}
-                                }}
+                                for(var i=0; i<buttons.length; i++) {{ if(buttons[i].innerText.includes('Final Submit')) {{ buttons[i].click(); break; }} }}
                             }} else {{
                                 var m = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
                                 var s = Math.floor((distance % (1000 * 60)) / 1000);
@@ -328,34 +240,31 @@ elif menu == "📝 Live Exam":
                             }}
                         }}, 1000);
                     </script>
-                </body>
-                </html>
+                </body></html>
                 """
                 components.html(timer_html, height=85) 
             
-            # Palette container with independent scrolling
-            st.markdown("<div class='palette-box'>", unsafe_allow_html=True)
             st.markdown("<h5 style='text-align:center; margin-top:0;'>Question Palette</h5>", unsafe_allow_html=True)
-            st.markdown("<p style='text-align:center; font-size:11px; margin-bottom:10px;'>🔵 Curr &nbsp; 🟢 Ans &nbsp; 🔴 Skip &nbsp; ⚪ Unvisit</p>", unsafe_allow_html=True)
+            st.markdown("<p style='text-align:center; font-size:11px; margin-bottom:5px;'>🔵 Curr | 🟢 Ans | 🔴 Skip | ⚪ Unvisit</p>", unsafe_allow_html=True)
             
-            grid_cols = st.columns(4)
-            for i in range(total_q):
-                if i == q_idx: icon = "🔵"
-                elif st.session_state.user_answers.get(i) is not None: icon = "🟢"
-                elif i in st.session_state.visited_questions: icon = "🔴"
-                else: icon = "⚪"
-                    
-                with grid_cols[i % 4]:
-                    if st.button(f"{icon}\n{i+1}", key=f"pal_{i}"):
-                        st.session_state.current_q = i
-                        st.rerun()
-            st.markdown("</div>", unsafe_allow_html=True)
+            # 🔄 NATIVE STREAMLIT SCROLL CONTAINER (Height=350 ensures scrollbar appears!)
+            with st.container(height=350, border=True):
+                grid_cols = st.columns(4)
+                for i in range(total_q):
+                    if i == q_idx: icon = "🔵"
+                    elif st.session_state.user_answers.get(i) is not None: icon = "🟢"
+                    elif i in st.session_state.visited_questions: icon = "🔴"
+                    else: icon = "⚪"
+                        
+                    with grid_cols[i % 4]:
+                        if st.button(f"{icon}\n{i+1}", key=f"pal_{i}"):
+                            st.session_state.current_q = i
+                            st.rerun()
 
-        # LEFT PANEL: Main Question Area
+        # 👈 LEFT PANEL (Main Question)
         with col_main:
             st.markdown(f"<h3 style='color:#4F46E5; margin-top:0;'>{st.session_state.topic}</h3>", unsafe_allow_html=True)
             st.write("---")
-            
             st.markdown(f"#### Q{q_idx + 1}. {q_data['q']}")
             
             saved_ans = st.session_state.user_answers.get(q_idx)
@@ -364,12 +273,9 @@ elif menu == "📝 Live Exam":
             
             clear_key = st.session_state.get(f"clear_{q_idx}", 0)
             choice = st.radio("Select your option:", q_data['options'], index=def_idx, key=f"rad_{q_idx}_{clear_key}", label_visibility="collapsed")
-            if choice:
-                st.session_state.user_answers[q_idx] = choice
+            if choice: st.session_state.user_answers[q_idx] = choice
                 
             st.write("")
-            st.write("")
-            
             b_col1, b_col2, b_col3, b_col4 = st.columns(4)
             with b_col1:
                 if st.button("⏪ Previous"):
