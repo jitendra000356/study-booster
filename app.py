@@ -6,6 +6,7 @@ import time
 import base64
 import re
 import json
+import pickle
 
 # ==========================================
 # 1. CONFIGURATION & CONSTANTS
@@ -20,6 +21,11 @@ st.set_page_config(
 CSV_FOLDER = 'saved_csvs'
 if not os.path.exists(CSV_FOLDER): 
     os.makedirs(CSV_FOLDER)
+
+# Initialize Session Folder for Persistence
+SESSION_FOLDER = 'active_sessions'
+if not os.path.exists(SESSION_FOLDER):
+    os.makedirs(SESSION_FOLDER)
 
 # Initialize Default Folder Structure
 DEFAULT_STRUCTURE = {
@@ -138,7 +144,25 @@ def save_timers_data(data):
 # 2. STATE INITIALIZATION
 # ==========================================
 def init_session():
-    """Initialize all session state variables safely."""
+    """Initialize all session state variables safely with refresh persistence support."""
+    # --- PERSISTENT REFRESH LOGIC ---
+    query_params = st.query_params
+    sid = query_params.get("sid", None)
+    
+    # If session ID exists in URL but memory is cleared (e.g. F5 refresh happened)
+    if sid and not st.session_state.get('auth', False):
+        session_path = os.path.join(SESSION_FOLDER, f"{sid}.pkl")
+        if os.path.exists(session_path):
+            try:
+                with open(session_path, "rb") as f:
+                    saved_state = pickle.load(f)
+                for k, v in saved_state.items():
+                    st.session_state[k] = v
+                return  # State fully restored!
+            except Exception:
+                pass  # Fallback to defaults if file is somehow corrupted
+                
+    # --- DEFAULT INITIALIZATION ---
     default_state = {
         'auth': False, 
         'current_user': "", 
@@ -146,7 +170,7 @@ def init_session():
         'current_q': 0,
         'user_answers': {}, 
         'visited_questions': set(), 
-        'marked_questions': set(), # New state for marking
+        'marked_questions': set(),
         'quiz_ready': False, 
         'topic': "", 
         'timer_mode': "No Timer", 
@@ -158,7 +182,8 @@ def init_session():
         'is_paused': False,
         'current_test_filename': "",
         'attempt_recorded': False,
-        'admin_current_path': ""
+        'admin_current_path': "",
+        'sid': "" # Track current persistent session ID
     }
     for key, value in default_state.items():
         if key not in st.session_state:
@@ -515,6 +540,12 @@ def render_login():
                     st.session_state.auth = True
                     st.session_state.current_user = username
                     st.session_state.active_page = "Dashboard"
+                    
+                    # Generate and set persistent session ID
+                    new_sid = base64.urlsafe_b64encode(os.urandom(12)).decode()
+                    st.session_state.sid = new_sid
+                    st.query_params["sid"] = new_sid
+                    
                     st.rerun()
                 else:
                     st.error("❌ Invalid Credentials! Please try again.")
@@ -535,7 +566,20 @@ def render_sidebar():
         
     st.sidebar.divider()
     if st.sidebar.button("🚪 Logout", type="secondary", use_container_width=True):
-        st.session_state.auth = False
+        # Clear persistent session securely
+        if st.session_state.get("sid"):
+            session_path = os.path.join(SESSION_FOLDER, f"{st.session_state.sid}.pkl")
+            if os.path.exists(session_path):
+                try: os.remove(session_path)
+                except Exception: pass
+        
+        if "sid" in st.query_params:
+            del st.query_params["sid"]
+            
+        # Hard wipe memory state to secure termination
+        for key in list(st.session_state.keys()):
+            del st.session_state[key]
+            
         st.rerun()
 
 def render_dashboard():
@@ -1152,6 +1196,16 @@ def main():
             render_exam()
         elif st.session_state.active_page == "Result":
             render_result()
+
+    # --- 5. PERSIST SESSION STATE ---
+    if st.session_state.get("auth") and st.session_state.get("sid"):
+        try:
+            session_path = os.path.join(SESSION_FOLDER, f"{st.session_state.sid}.pkl")
+            safe_state = {k: v for k, v in st.session_state.items()}
+            with open(session_path, "wb") as f:
+                pickle.dump(safe_state, f)
+        except Exception:
+            pass
 
 if __name__ == "__main__":
     main()
