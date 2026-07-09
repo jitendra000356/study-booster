@@ -295,4 +295,41 @@ elif menu == "📝 Live Exam":
             st.markdown(f"<h3 style='color:#4F46E5; margin-top:0;'>{st.session_state.topic}</h3>", unsafe_allow_html=True)
             st.write("---")
             
-            st.markdown(f"<h4 style='line-height: 1.5;'>Q{q_idx + 1}. {q_data['q']}</h4>", unsafe_allow_
+            st.markdown(f"<h4 style='line-height: 1.5;'>Q{q_idx + 1}. {q_data['q']}</h4>", unsafe_allow_html=True)
+            
+            saved_ans = st.session_state.user_answers.get(q_idx)
+            try:
+                def_idx = q_data['options'].index(saved_ans)
+            except:
+                def_idx = None
+            
+            clear_key = st.session_state.get(f"clear_{q_idx}", 0)
+            choice = st.radio("Options:", q_data['options'], index=def_idx, key=f"rad_{q_idx}_{clear_key}", label_visibility="collapsed")
+            if choice:
+                st.session_state.user_answers[q_idx] = choice
+                
+            st.write("")
+            st.write("")
+            
+            b_col1, b_col2, b_col3, b_col4 = st.columns(4)
+            with b_col1:
+                if st.button("⏪ Previous"):
+                    if q_idx > 0:
+                        st.session_state.current_q -= 1
+                    st.rerun()
+            with b_col2:
+                if st.button("🧹 Clear"):
+                    st.session_state.user_answers.pop(q_idx, None)
+                    st.session_state[f"clear_{q_idx}"] = clear_key + 1
+                    st.rerun()
+            with b_col3:
+                is_last = (q_idx == total_q - 1)
+                btn_txt = "Next ⏩" if not is_last else "Finish"
+                if st.button(btn_txt, type="primary"):
+                    if not is_last:
+                        st.session_state.current_q += 1
+                        st.rerun()
+            with b_col4:
+                if st.button("🚀 Final Submit", type="primary"):
+                    st.session_state.quiz_completed = True
+                    st.rerun()
