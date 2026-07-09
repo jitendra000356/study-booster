@@ -33,7 +33,7 @@ def add_bg_from_local(image_file):
 
 add_bg_from_local('bg.jpg') 
 
-# 🛠️ BASE CSS (100% CLEAR TOP ICONS FIX)
+# 🛠️ BASE CSS (100% GUARANTEED TOP ICONS FIX)
 st.markdown("""
     <style>
     .block-container { 
@@ -45,18 +45,31 @@ st.markdown("""
         margin-top: 10px;
         box-shadow: 0 4px 10px rgba(0,0,0,0.15);
     }
-    header[data-testid="stHeader"] { background-color: transparent !important; }
     
-    /* 🎯 100% CLEAR FIX FOR TOP CORNERS (Settings & Sidebar Toggle) */
-    header[data-testid="stHeader"] button, [data-testid="collapsedControl"] {
+    /* 🎯 THE ULTIMATE FIX FOR TOP ICONS (Menu & Sidebar) */
+    header[data-testid="stHeader"] { 
+        background-color: transparent !important; 
+    }
+    
+    /* Targeting every possible Streamlit class for top corners */
+    header[data-testid="stHeader"] button, 
+    [data-testid="stToolbar"] button,
+    [data-testid="collapsedControl"],
+    button[kind="header"] {
         background-color: #ffffff !important; 
         border-radius: 50% !important;
-        box-shadow: 0 2px 6px rgba(0,0,0,0.5) !important; 
-        border: 1px solid #64748b !important; 
-        color: #000000 !important;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.8) !important; 
+        border: 2px solid #000000 !important; 
+        opacity: 1 !important;
+        visibility: visible !important;
+        z-index: 99999 !important;
     }
-    /* SVG ke andar ke har ek element (path, circle, line) ko kaala (black) karne ka fix */
-    header[data-testid="stHeader"] button *, [data-testid="collapsedControl"] * {
+    
+    /* Forcing all icons inside them to be pure black */
+    header[data-testid="stHeader"] button *, 
+    [data-testid="stToolbar"] button *,
+    [data-testid="collapsedControl"] *,
+    button[kind="header"] * {
         fill: #000000 !important;
         color: #000000 !important;
         stroke: #000000 !important;
@@ -283,114 +296,4 @@ elif menu == "📝 Live Exam":
             body { margin:0; padding:0; font-family:sans-serif; }
             .timer-box { background-color:#fee2e2; border:2px solid #ef4444; color:#dc2626 !important; padding:8px 0; border-radius:8px; font-size:20px; font-weight:bold; text-align:center; box-shadow:0 2px 4px rgba(0,0,0,0.1); margin-bottom: 5px; }
             .timer-box span { color:#dc2626 !important; }
-            .no-timer { background-color:#e0f2fe; border-color:#38bdf8; color:#0284c7 !important; }
-            </style></head><body>
-                __UI_CODE__
-                <script>
-                    __TIMER_CODE__
-                    setTimeout(function() {
-                        try {
-                            var frame = window.frameElement;
-                            var col = frame.closest('div[data-testid="column"]');
-                            if(!col) col = frame.parentElement.parentElement.parentElement;
-                            
-                            if (col) {
-                                col.style.position = '-webkit-sticky';
-                                col.style.position = 'sticky';
-                                col.style.top = '15px';
-                                col.style.height = '85vh'; 
-                                col.style.overflowY = 'auto'; 
-                                col.style.borderLeft = '2px solid #e2e8f0';
-                                col.style.paddingLeft = '10px';
-                                col.style.paddingRight = '5px';
-                                col.classList.add('my-palette');
-                                
-                                var main = window.parent.document.querySelector('section[data-testid="stMain"]');
-                                if(main) main.style.overflow = 'visible';
-                                var block = window.parent.document.querySelector('.block-container');
-                                if(block) block.style.overflow = 'visible';
-                                
-                                if (!window.parent.document.getElementById('palette-css')) {
-                                    var style = window.parent.document.createElement('style');
-                                    style.id = 'palette-css';
-                                    style.innerHTML = `
-                                        .my-palette::-webkit-scrollbar { width: 5px; }
-                                        .my-palette::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 5px; }
-                                        .my-palette div.stButton > button {
-                                            background-color: #ffffff !important;
-                                            padding: 0px !important;
-                                            font-size: 13px !important;
-                                            height: 38px !important;
-                                            min-height: 38px !important;
-                                            border-radius: 6px !important;
-                                            border: 1px solid #cbd5e1 !important;
-                                        }
-                                        .my-palette div.stButton > button p {
-                                            color: #000000 !important;
-                                        }
-                                        .my-palette div[data-testid="column"] { padding: 2px !important; }
-                                    `;
-                                    window.parent.document.head.appendChild(style);
-                                }
-                            }
-                        } catch(e) {}
-                    }, 200);
-                </script>
-            </body></html>
-            """
-            html_hack = html_hack.replace("__UI_CODE__", ui_code).replace("__TIMER_CODE__", timer_code)
-            components.html(html_hack, height=60) 
-            
-            st.markdown("<h5 style='text-align:center; margin-top:5px;'>Question Palette</h5>", unsafe_allow_html=True)
-            st.markdown("<p style='text-align:center; font-size:12px; margin-bottom:10px;'>🔵 Curr &nbsp; 🟢 Ans &nbsp; 🔴 Skip &nbsp; ⚪ Unvisit</p>", unsafe_allow_html=True)
-            
-            grid_cols = st.columns(5)
-            for i in range(total_q):
-                if i == q_idx: icon = "🔵"
-                elif st.session_state.user_answers.get(i) is not None: icon = "🟢"
-                elif i in st.session_state.visited_questions: icon = "🔴"
-                else: icon = "⚪"
-                    
-                with grid_cols[i % 5]:
-                    if st.button(f"{icon} {i+1}", key=f"pal_{i}"):
-                        st.session_state.current_q = i
-                        st.rerun()
-
-        # 👈 LEFT PANEL
-        with col_main:
-            st.markdown(f"<h3 style='color:#4F46E5 !important; margin-top:0;'>{st.session_state.topic}</h3>", unsafe_allow_html=True)
-            st.write("---")
-            
-            st.markdown(f"<h4 style='line-height: 1.5;'>Q{q_idx + 1}. {q_data['q']}</h4>", unsafe_allow_html=True)
-            
-            saved_ans = st.session_state.user_answers.get(q_idx)
-            try: def_idx = q_data['options'].index(saved_ans)
-            except: def_idx = None
-            
-            clear_key = st.session_state.get(f"clear_{q_idx}", 0)
-            choice = st.radio("Options:", q_data['options'], index=def_idx, key=f"rad_{q_idx}_{clear_key}", label_visibility="collapsed")
-            if choice: st.session_state.user_answers[q_idx] = choice
-                
-            st.write("")
-            st.write("")
-            
-            b_col1, b_col2, b_col3, b_col4 = st.columns(4)
-            with b_col1:
-                if st.button("⏪ Previous"):
-                    if q_idx > 0: st.session_state.current_q -= 1
-                    st.rerun()
-            with b_col2:
-                if st.button("🧹 Clear"):
-                    st.session_state.user_answers.pop(q_idx, None)
-                    st.session_state[f"clear_{q_idx}"] = clear_key + 1
-                    st.rerun()
-            with b_col3:
-                is_last = (q_idx == total_q - 1)
-                if st.button("Next ⏩" if not is_last else "Finish", type="primary"):
-                    if not is_last:
-                        st.session_state.current_q += 1
-                        st.rerun()
-            with b_col4:
-                if st.button("🚀 Final Submit", type="primary"):
-                    st.session_state.quiz_completed = True
-                    st.rerun()
+            .no-timer { background-color
