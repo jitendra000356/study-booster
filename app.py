@@ -5,6 +5,7 @@ import os
 import time
 import base64
 import re
+import json
 
 # ==========================================
 # 1. CONFIGURATION & CONSTANTS
@@ -20,6 +21,8 @@ CSV_FOLDER = 'saved_csvs'
 if not os.path.exists(CSV_FOLDER): 
     os.makedirs(CSV_FOLDER)
 
+ATTEMPTS_FILE = 'attempts_data.json'
+
 # Existing Authentication mapping
 ALLOWED_USERS = {
     "Jitendra (Admin)": "Admin@1996", 
@@ -31,6 +34,53 @@ ALLOWED_USERS = {
     "Pankaj (Student)": "Pankaj@123", 
     "Pappu (Student)": "Pappu@123"
 }
+
+# ==========================================
+# ATTEMPT MANAGEMENT FUNCTIONS
+# ==========================================
+def load_attempts_data():
+    if not os.path.exists(ATTEMPTS_FILE):
+        return {}
+    with open(ATTEMPTS_FILE, 'r') as f:
+        try:
+            return json.load(f)
+        except:
+            return {}
+
+def save_attempts_data(data):
+    with open(ATTEMPTS_FILE, 'w') as f:
+        json.dump(data, f, indent=4)
+
+def get_attempt_data(user, test_file):
+    data = load_attempts_data()
+    if user not in data:
+        data[user] = {}
+    if test_file not in data[user]:
+        data[user][test_file] = {'allowed': 2, 'used': 0}
+    return data[user][test_file]
+
+def increment_attempt(user, test_file):
+    data = load_attempts_data()
+    if user not in data: data[user] = {}
+    if test_file not in data[user]: data[user][test_file] = {'allowed': 2, 'used': 0}
+    data[user][test_file]['used'] += 1
+    save_attempts_data(data)
+
+def set_allowed_attempts(user, test_file, allowed_count):
+    data = load_attempts_data()
+    if user not in data: data[user] = {}
+    if test_file not in data[user]: data[user][test_file] = {'allowed': 2, 'used': 0}
+    data[user][test_file]['allowed'] = allowed_count
+    save_attempts_data(data)
+
+def record_attempt_usage():
+    """Securely increments the attempt count once per active test session upon completion."""
+    if not st.session_state.get('attempt_recorded', False):
+        user = st.session_state.get('current_user')
+        test_file = st.session_state.get('current_test_filename')
+        if user and test_file:
+            increment_attempt(user, test_file)
+        st.session_state.attempt_recorded = True
 
 # ==========================================
 # 2. STATE INITIALIZATION
@@ -52,7 +102,9 @@ def init_session():
         'last_calc_time': 0,
         'last_interaction_time': 0,
         'active_page': "Dashboard",
-        'is_paused': False
+        'is_paused': False,
+        'current_test_filename': "",
+        'attempt_recorded': False
     }
     for key, value in default_state.items():
         if key not in st.session_state:
@@ -76,6 +128,7 @@ def passive_time_check():
         if st.session_state.remaining_seconds <= 0:
             st.session_state.remaining_seconds = 0
             st.session_state.active_page = "Result"
+            record_attempt_usage()
             st.rerun()
 
     # Auto-Pause if inactive for 5 minutes (300 seconds)
@@ -144,6 +197,10 @@ def load_quiz(file_name, timer_mode, time_minutes):
     st.session_state.time_val = time_minutes
     st.session_state.remaining_seconds = time_minutes * 60
     st.session_state.is_paused = False
+    
+    # Store test info for accurate attempt recording
+    st.session_state.current_test_filename = file_name
+    st.session_state.attempt_recorded = False
 
 def calculate_score():
     """Calculates final score dynamically and safely."""
@@ -174,6 +231,7 @@ def nav_submit():
     record_activity()
     if not st.session_state.is_paused:
         st.session_state.active_page = "Result"
+        record_attempt_usage()
 
 def pause_exam():
     record_activity()
@@ -481,6 +539,26 @@ def render_dashboard():
                 with open(os.path.join(CSV_FOLDER, uploaded_file.name), "wb") as f: 
                     f.write(uploaded_file.getbuffer())
                 st.success("✅ Test uploaded successfully! It is now available below.")
+                
+        # --- NEW ATTEMPT MANAGEMENT ADMIN PANEL ---
+        with st.expander("⚙️ Admin Panel: Attempt Management", expanded=False):
+            st.markdown("Select a user and a test to modify attempt limits.")
+            a_col1, a_col2 = st.columns(2)
+            with a_col1:
+                sel_user = st.selectbox("Select User", list(ALLOWED_USERS.keys()), key="adm_user")
+            with a_col2:
+                all_tests_admin = [f for f in os.listdir(CSV_FOLDER) if f.endswith('.csv')]
+                if all_tests_admin:
+                    sel_test = st.selectbox("Select Test", all_tests_admin, key="adm_test")
+                else:
+                    sel_test = None
+            
+            if sel_user and sel_test:
+                curr_data = get_attempt_data(sel_user, sel_test)
+                new_limit = st.number_input("Allowed Attempts", min_value=1, value=curr_data['allowed'], key="adm_limit")
+                if st.button("Update Limit", type="primary", key="btn_update_limit"):
+                    set_allowed_attempts(sel_user, sel_test, new_limit)
+                    st.success(f"✅ Updated! {sel_user.split()[0]} now has {new_limit} allowed attempts for {sel_test.replace('.csv', '').replace('_', ' ')}.")
     
     col_settings, col_tests = st.columns([1, 1.5])
     
@@ -501,10 +579,23 @@ def render_dashboard():
         else:
             with st.container(border=True):
                 for file in files:
+                    user = st.session_state.current_user
+                    attempt_data = get_attempt_data(user, file)
+                    allowed = attempt_data['allowed']
+                    used = attempt_data['used']
+                    remaining = allowed - used
+
                     c1, c2 = st.columns([3, 1])
-                    c1.markdown(f"<h5 style='margin-top: 10px;'>📄 {file.replace('.csv', '').replace('_', ' ')}</h5>", unsafe_allow_html=True)
-                    if c2.button("Load Test", key=f"load_{file}"):
-                        load_quiz(file, t_mode, t_val)
+                    c1.markdown(f"<h5 style='margin-top: 10px; margin-bottom: 2px;'>📄 {file.replace('.csv', '').replace('_', ' ')}</h5>", unsafe_allow_html=True)
+                    
+                    # Display updated attempts count
+                    c1.markdown(f"<p style='font-size: 0.85rem; color: #64748b; margin-top: 0;'>Attempts: {used} / {allowed} &nbsp;|&nbsp; Remaining: {remaining}</p>", unsafe_allow_html=True)
+                    
+                    if remaining > 0:
+                        if c2.button("Load Test", key=f"load_{file}"):
+                            load_quiz(file, t_mode, t_val)
+                    else:
+                        c2.button("Limit Reached", key=f"limit_{file}", disabled=True, help="You have reached the maximum number of attempts allowed for this test. Please contact the administrator.")
                         
     # Start Test section appended directly to dashboard bottom
     if st.session_state.quiz_ready:
