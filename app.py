@@ -840,7 +840,6 @@ def render_exam():
     </style>
     """, unsafe_allow_html=True)
 
-    # REVERTED TO 2 COLUMNS (Removed col_hidden entirely to fix the layout squeeze)
     col_main, col_pal = st.columns([7, 3]) 
     
     ans_count = 0
@@ -868,6 +867,10 @@ def render_exam():
     # ================== RIGHT PANEL ==================
     with col_pal:
         render_visual_timer()
+        
+        # --- UI REFINEMENT 2: PAUSE BUTTON RELOCATED HERE ---
+        st.button("⏸ Pause", type="secondary", on_click=pause_exam, use_container_width=True, key="btn_pause_top")
+        # ----------------------------------------------------
         
         username_display = st.session_state.current_user.split()[0]
         avatar_letter = username_display[0].upper() if username_display else "U"
@@ -1053,7 +1056,9 @@ def render_exam():
         with b2:
             st.button("Instructions", use_container_width=True, key="btn_inst")
             
-        st.button("Submit Test", type="primary", use_container_width=True, key="btn_sub_right", on_click=nav_submit)
+        # --- UI REFINEMENT 1: RENAMED SUBMIT BUTTON ---
+        st.button("🚀 Final Submit", type="primary", use_container_width=True, key="btn_sub_right", on_click=nav_submit)
+        # ----------------------------------------------
 
     # ================== LEFT PANEL ==================
     with col_main:
@@ -1085,7 +1090,8 @@ def render_exam():
             
         st.write("<br><br>", unsafe_allow_html=True)
         
-        b_col1, b_col2, b_col3, b_col4, b_col5, b_col6 = st.columns([1.5, 1.5, 2.5, 1.5, 1.5, 2])
+        # --- UI REFINEMENT 1 & 2: REMOVED PAUSE AND FINAL SUBMIT FROM HERE ---
+        b_col1, b_col2, b_col3, b_col4 = st.columns([1.5, 1.5, 2.5, 1.5])
         
         with b_col1:
             st.button("⏪ Previous", on_click=nav_prev, use_container_width=True)
@@ -1103,12 +1109,7 @@ def render_exam():
                 st.button("Next ⏩", type="primary", on_click=nav_next, use_container_width=True)
             else:
                 st.button("Finish", type="secondary", disabled=True, use_container_width=True)
-                    
-        with b_col5:
-            st.button("⏸ Pause", type="secondary", on_click=pause_exam, use_container_width=True)
-                
-        with b_col6:
-            st.button("🚀 Final Submit", type="primary", on_click=nav_submit, use_container_width=True)
+        # ---------------------------------------------------------------------
 
 def render_result():
     total_q = len(st.session_state.questions)
