@@ -122,7 +122,7 @@ st.markdown("""
 
 CSV_FOLDER = 'saved_csvs'
 if not os.path.exists(CSV_FOLDER): os.makedirs(CSV_FOLDER)
-ALLOWED_USERS = {"Jitendra (Admin)": "Admin1996", "Jili (Student)": "Jili1999" "Satish (Student)": "Satish2004" "Binita (Student)": "Bini1993" "Arvind (Student)": "Arvind1994" "Gaurav (Kalu)": "Kalu1997" "Pankaj (Student)": "Pankaj123" "Pappu (Student)": "Pappu123"}
+ALLOWED_USERS = {"Jitendra (Admin)": "Admin1996"}
 
 # ==========================================
 # 2. SESSION STATE
