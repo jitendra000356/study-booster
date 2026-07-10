@@ -862,7 +862,7 @@ def render_dashboard():
             for folder in folders:
                 fc1, fc2 = st.columns([8, 2])
                 fc1.button(f"📁 {folder}", key=f"nav_{current_admin_path}_{folder}", on_click=nav_admin_down, args=(folder,), use_container_width=True)
-                if current_admin_path == "" and folder in ["Science", "Arts", "Statistics"]:
+                if current_admin_path == "" and folder in ["Arts", "Computer", "Current affairs", "Science", "Statistics"]:
                     fc2.markdown("<div style='padding-top:10px; color:#94a3b8; font-size:12px; font-weight:bold;'>System Folder</div>", unsafe_allow_html=True)
                 else:
                     if fc2.button("🗑️ Delete", key=f"del_f_{current_admin_path}_{folder}", use_container_width=True):
