@@ -108,8 +108,11 @@ def get_all_users_cached():
     try:
         response = supabase.table('users').select("username, password").execute()
         users_dict = {row['username']: row['password'] for row in response.data}
-        if not users_dict:
-            return {"Jitendra (Admin)": "Admin@1996"}
+        
+        # FIX: Master Admin ko hamesha list mein rakhein taaki aap kabhi lock out na hon
+        if "Jitendra (Admin)" not in users_dict:
+            users_dict["Jitendra (Admin)"] = "Admin@1996"
+            
         return users_dict
     except Exception as e:
         logger.error(f"Database Connection Error fetching users: {e}")
