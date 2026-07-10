@@ -34,6 +34,11 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+# Initialize Session Folder for Pause/Resume Persistence only
+SESSION_FOLDER = 'active_sessions'
+if not os.path.exists(SESSION_FOLDER):
+    os.makedirs(SESSION_FOLDER)
+
 # Feature 4: Restructure Question Bank Management (Basic & Advanced)
 CSV_FOLDER = 'saved_csvs'
 ADVANCED_CSV_FOLDER = 'advanced_csvs'
@@ -44,12 +49,7 @@ if not os.path.exists(CSV_FOLDER):
 if not os.path.exists(ADVANCED_CSV_FOLDER):
     os.makedirs(ADVANCED_CSV_FOLDER)
 
-# Initialize Session Folder for Persistence
-SESSION_FOLDER = 'active_sessions'
-if not os.path.exists(SESSION_FOLDER):
-    os.makedirs(SESSION_FOLDER)
-
-# Initialize Default Folder Structure for both banks (Local creation)
+# Cloud Default Category Structure
 DEFAULT_STRUCTURE = {
     "Science": ["Physics", "Chemistry", "Biology", "Environment"],
     "Arts": ["History", "Polity", "Geography", "Economics"],
@@ -57,6 +57,7 @@ DEFAULT_STRUCTURE = {
     "Current affairs": []
 }
 
+# Ensure Local Physical Folders exist (as requested)
 for base_folder in [CSV_FOLDER, ADVANCED_CSV_FOLDER]:
     for root_cat, sub_cats in DEFAULT_STRUCTURE.items():
         root_path = os.path.join(base_folder, root_cat)
@@ -68,23 +69,36 @@ for base_folder in [CSV_FOLDER, ADVANCED_CSV_FOLDER]:
 # DATA MANAGEMENT FUNCTIONS (CLOUD BASED)
 # ==========================================
 
-@st.cache_data(ttl=3600) 
 def check_and_create_default_folders():
     """Automatically seeds Supabase with the default folder structure if missing."""
+    if st.session_state.get('folders_checked', False):
+        return
+        
     try:
+        # Check if the basic 'Science' folder exists
         res = supabase.table('question_banks').select('id').eq('folder_path', 'Science').execute()
         if not res.data:
+            # If not found, generate all default folders for both banks
             for bank_type in ["Basic", "Advanced"]:
                 for root_cat, sub_cats in DEFAULT_STRUCTURE.items():
+                    # Create root category folder
                     supabase.table('question_banks').insert({
-                        'bank_type': bank_type, 'folder_path': root_cat, 'file_name': '.keep', 'csv_data': ''
+                        'bank_type': bank_type, 
+                        'folder_path': root_cat, 
+                        'file_name': '.keep', 
+                        'csv_data': ''
                     }).execute()
+                    # Create subcategory folders
                     for sub_cat in sub_cats:
                         supabase.table('question_banks').insert({
-                            'bank_type': bank_type, 'folder_path': f"{root_cat}/{sub_cat}", 'file_name': '.keep', 'csv_data': ''
+                            'bank_type': bank_type, 
+                            'folder_path': f"{root_cat}/{sub_cat}", 
+                            'file_name': '.keep', 
+                            'csv_data': ''
                         }).execute()
+        st.session_state.folders_checked = True
     except Exception as e:
-        print(f"Error seeding default folders: {e}")
+        st.error(f"⚠️ Supabase Folder Generation Error: {e} (Hint: Check if RLS is disabled on 'question_banks' table!)")
 
 def get_all_users():
     try:
@@ -115,10 +129,14 @@ def delete_user_from_db(username):
     except:
         return False
 
+# --- CLOUD FETCHING FUNCTIONS FOR HISTORY ---
 def get_supabase_history(username):
+    """Fetches test history from Supabase for a specific user"""
     try:
         response = supabase.table('test_results').select("*").eq('username', username).execute()
         history = []
+        
+        # Sort by datetime sequentially to match old graph progression logic
         sorted_data = sorted(response.data, key=lambda x: x.get('datetime', ''))
 
         for row in sorted_data:
@@ -151,9 +169,11 @@ def get_supabase_history(username):
         return []
 
 def get_all_supabase_history():
+    """Fetches all test histories from Supabase for Admin reporting"""
     try:
         response = supabase.table('test_results').select("*").execute()
         history_dict = {}
+        
         sorted_data = sorted(response.data, key=lambda x: x.get('datetime', ''))
         
         for row in sorted_data:
@@ -190,10 +210,13 @@ def get_all_supabase_history():
         print(f"Error fetching all history from Supabase: {e}")
         return {}
 
+# --- CLOUD FUNCTIONS FOR SETTINGS (Penalties, Timers, Attempts) ---
+
 def get_neg_mark(test_key):
     try:
         res = supabase.table('test_penalties').select('penalty').eq('test_file', test_key).execute()
-        if res.data: return float(res.data[0]['penalty'])
+        if res.data: 
+            return float(res.data[0]['penalty'])
     except: pass
     return 0.0
 
@@ -228,7 +251,8 @@ def set_timer_config(test_key, mode, value):
 def get_attempt_data(user, test_file):
     try:
         res = supabase.table('user_attempts').select('*').eq('username', user).eq('test_file', test_file).execute()
-        if res.data: return {'allowed': res.data[0]['allowed'], 'used': res.data[0]['used']}
+        if res.data: 
+            return {'allowed': res.data[0]['allowed'], 'used': res.data[0]['used']}
     except: pass
     return {'allowed': 2, 'used': 0}
 
@@ -254,8 +278,9 @@ def set_allowed_attempts(user, test_file, allowed_count):
     except Exception as e:
         print(f"Error setting allowed attempts: {e}")
 
-@st.cache_data(ttl=2)
+# --- CLOUD CSV QUESTION BANK FUNCTIONS ---
 def get_cloud_hierarchy(bank_type):
+    """Returns a list of unique folders and a list of file paths from Supabase"""
     try:
         res = supabase.table('question_banks').select('folder_path, file_name').eq('bank_type', bank_type).execute()
         folders = set()
@@ -264,12 +289,16 @@ def get_cloud_hierarchy(bank_type):
             fp = r['folder_path']
             if fp != 'Root':
                 folders.add(fp)
+                # Ensure parent is recorded if nested
                 parts = fp.split('/')
-                if len(parts) > 1: folders.add(parts[0])
+                if len(parts) > 1:
+                    folders.add(parts[0])
             
             if r['file_name'] != '.keep':
-                if fp == 'Root': files.append(r['file_name'])
-                else: files.append(f"{fp}/{r['file_name']}")
+                if fp == 'Root':
+                    files.append(r['file_name'])
+                else:
+                    files.append(f"{fp}/{r['file_name']}")
         return sorted(list(folders)), sorted(files)
     except Exception as e:
         print(f"Error fetching Cloud Hierarchy: {e}")
@@ -323,8 +352,13 @@ def record_detailed_attempt(user, test_key, original_file):
                     status = "Incorrect"; marks = 0; neg = get_neg_mark(test_key)
                     
         q_details.append({
-            "q_num": q_num, "question": clean_q, "user_ans": u_ans_str,
-            "correct_ans": c_ans_str, "status": status, "marks": marks, "negative": neg
+            "q_num": q_num,
+            "question": clean_q,
+            "user_ans": u_ans_str,
+            "correct_ans": c_ans_str,
+            "status": status,
+            "marks": marks,
+            "negative": neg
         })
         
     attempt_data = {
@@ -347,12 +381,19 @@ def record_detailed_attempt(user, test_key, original_file):
 
     try:
         supabase_data = {
-            "username": user, "test_name": attempt_data["test_name"], "subject": attempt_data["subject"],
-            "total_questions": attempt_data["total_questions"], "correct": attempt_data["correct"],
-            "incorrect": attempt_data["incorrect"], "unanswered": attempt_data["unanswered"],
-            "final_score": attempt_data["final_score"], "folder": attempt_data["folder"],
-            "attempt_number": attempt_data["attempt_number"], "negative_marks": attempt_data["negative_marks"],
-            "percentage": attempt_data["percentage"], "datetime": attempt_data["datetime"],
+            "username": user,
+            "test_name": attempt_data["test_name"],
+            "subject": attempt_data["subject"],
+            "total_questions": attempt_data["total_questions"],
+            "correct": attempt_data["correct"],
+            "incorrect": attempt_data["incorrect"],
+            "unanswered": attempt_data["unanswered"],
+            "final_score": attempt_data["final_score"],
+            "folder": attempt_data["folder"],
+            "attempt_number": attempt_data["attempt_number"],
+            "negative_marks": attempt_data["negative_marks"],
+            "percentage": attempt_data["percentage"],
+            "datetime": attempt_data["datetime"],
             "q_details": json.dumps(attempt_data["q_details"]) 
         }
         supabase.table("test_results").insert(supabase_data).execute()
@@ -367,11 +408,13 @@ def record_attempt_usage():
             original_file = test_key.replace("ADVANCED|", "")
             increment_attempt(user, test_key)
             record_detailed_attempt(user, test_key, original_file)
+            
             try:
                 res = supabase.table('test_results').select('id').eq('username', user).execute()
                 st.session_state.history_view_index = len(res.data) - 1
             except:
                 st.session_state.history_view_index = 0
+            
         st.session_state.attempt_recorded = True
 
 # ==========================================
@@ -386,7 +429,7 @@ def init_session():
         'active_page': "Dashboard", 'dashboard_tab': "Practice", 'is_paused': False,
         'current_test_filename': "", 'attempt_recorded': False, 'admin_current_path': "",
         'sid': "", 'current_bank': "Basic", 'last_admin_bank': "Basic",
-        'query_input': "", 'history_view_index': -1
+        'query_input': "", 'history_view_index': -1, 'folders_checked': False
     }
 
     query_params = st.query_params
@@ -410,6 +453,7 @@ def init_session():
 # ==========================================
 def passive_time_check():
     if st.session_state.get('active_page') != 'Exam' or st.session_state.get('is_paused', False): return
+
     now = time.time()
     elapsed = now - st.session_state.get('last_calc_time', now)
     st.session_state.last_calc_time = now
@@ -436,8 +480,8 @@ def record_activity():
         elapsed = now - st.session_state.last_calc_time
         if st.session_state.timer_mode == "Total Time (Minutes)":
             st.session_state.remaining_seconds -= elapsed
-    st.session_state.last_calc_time = now
     
+    st.session_state.last_calc_time = now
     inactive_duration = now - st.session_state.last_interaction_time
     if inactive_duration > 300 and not st.session_state.is_paused:
         st.session_state.is_paused = True
@@ -447,10 +491,14 @@ def record_activity():
     else:
         st.session_state.last_interaction_time = now
 
+# ==========================================
+# 4. EXAM CONTROL & LOGIC FUNCTIONS
+# ==========================================
 def load_quiz(file_name):
     with st.spinner(f"Configuring {os.path.basename(file_name)} engine from Cloud..."):
         st.session_state.questions = []
         bank = st.session_state.get('current_bank', 'Basic')
+        
         parts = file_name.split('/')
         fname = parts[-1]
         folder_path = '/'.join(parts[:-1]) if len(parts) > 1 else 'Root'
@@ -460,11 +508,13 @@ def load_quiz(file_name):
             res = supabase.table('question_banks').select('csv_data').eq('bank_type', bank).eq('folder_path', folder_path).eq('file_name', fname).execute()
             if not res.data:
                 st.error("Assessment data not found in Cloud.")
-                time.sleep(2); st.rerun()
+                time.sleep(2)
+                st.rerun()
             
             csv_data = res.data[0]['csv_data']
             f = io.StringIO(csv_data)
             reader = csv.DictReader(f)
+            
             for row in reader:
                 raw_type = row.get('Type')
                 q_type = str(raw_type).strip().lower() if raw_type else ''
@@ -476,6 +526,7 @@ def load_quiz(file_name):
                         l_str = str(l_val).strip() if l_val else ''
                         r_str = str(r_val).strip() if r_val else ''
                         if l_str and r_str: left_items.append(l_str); right_items.append(r_str)
+                    
                     if left_items:
                         q_text = row.get('Question')
                         st.session_state.questions.append({
@@ -489,16 +540,21 @@ def load_quiz(file_name):
                     for i in range(1, 6):
                         val = row.get(f'Option{i}')
                         if val and str(val).strip(): opts.append(str(val).strip())
-                    q_text = row.get('Question'); ans_val = row.get('Answer')
+                    
+                    q_text = row.get('Question')
+                    ans_val = row.get('Answer')
                     ans_str = str(ans_val).strip() if ans_val else ''
+                    
                     st.session_state.questions.append({
                         'type': 'mcq', 'q': str(q_text).strip() if q_text else '', 
                         'options': opts, 'ans': int(ans_str) - 1 if ans_str.isdigit() else -1
                     })
         except Exception as e:
-            st.error(f"Error parsing Cloud File: {e}"); st.stop()
+            st.error(f"Error parsing Cloud File: {e}")
+            st.stop()
                 
         t_config = get_timer_config(test_key)
+        
         if t_config["mode"] == "No Timer": t_mode = "No Timer"; t_val = 0; rem_sec = 0
         elif t_config["mode"] == "Per Question":
             t_mode = "Total Time (Minutes)" 
@@ -523,6 +579,7 @@ def load_quiz(file_name):
 def calculate_detailed_score(test_key):
     score = 0; incorrect = 0; unanswered = 0
     neg_mark_value = get_neg_mark(test_key)
+
     for i, q in enumerate(st.session_state.questions):
         is_match = (q.get('type') == 'match')
         user_ans = st.session_state.user_answers.get(i)
@@ -535,6 +592,7 @@ def calculate_detailed_score(test_key):
                 correct_ans = q['options'][q['ans']] if 0 <= q['ans'] < len(q['options']) else None
                 if user_ans == correct_ans: score += 1
                 else: incorrect += 1
+
     negative_marks = incorrect * neg_mark_value
     final_score = score - negative_marks
     return score, incorrect, unanswered, negative_marks, final_score
@@ -802,6 +860,7 @@ def render_admin():
     st.markdown("<h2 style='font-weight:800;'>⚙️ Admin Control Panel</h2>", unsafe_allow_html=True)
     st.write("---")
     
+    # Safely fetch options for dropdowns
     _, basic_files = get_cloud_hierarchy("Basic")
     _, adv_files = get_cloud_hierarchy("Advanced")
     
@@ -853,11 +912,14 @@ def render_admin():
                     st.toast("Uploaded securely to Cloud!", icon="✅"); time.sleep(0.5); st.rerun()
                 
         st.write("---")
+        
+        # Fetch cloud files for current bank
         res = supabase.table('question_banks').select('id, folder_path, file_name, created_at, csv_data').eq('bank_type', admin_bank).execute()
         records = res.data
         
         subfolders = set()
         files = []
+        
         for r in records:
             fp = r['folder_path']
             if current_path == 'Root':
@@ -873,6 +935,7 @@ def render_admin():
                     subfolders.add(remainder.split('/')[0])
 
         subfolders = sorted(list(subfolders))
+        
         st.markdown("#### Folders")
         for folder in subfolders:
             with st.container(border=True):
@@ -1054,9 +1117,13 @@ def render_admin():
                 except Exception as e: pass
                 
                 new_fb = st.text_area("Write personalized feedback for this user:", value=current_fb, height=120)
+                
                 if st.button("Save Feedback", type="primary", key=f"save_fb_{sel_u}"):
                     try:
-                        supabase.table('user_feedback').upsert({"username": sel_u, "feedback": new_fb}).execute()
+                        supabase.table('user_feedback').upsert({
+                            "username": sel_u,
+                            "feedback": new_fb
+                        }).execute()
                         st.toast("Feedback saved securely to Cloud!", icon="✅")
                     except Exception as e:
                         st.error(f"Error saving feedback: {e}")
@@ -1076,6 +1143,7 @@ def render_dashboard_practice():
         files_to_disp = [f for f in all_files if search_q in f.lower()]
     else:
         c1, c2 = st.columns(2)
+        # Display top-level root folders
         root_flds = sorted(list(set(f.split('/')[0] for f in folders)))
         sel_cat = c1.selectbox("Category", ["All"] + root_flds) if root_flds else "All"
         
@@ -1419,10 +1487,11 @@ def render_result():
 # 7. MAIN APPLICATION LOOP
 # ==========================================
 def main():
-    # Force cloud folder creation check immediately upon starting
+    init_session()
+    
+    # Check folder creation from Supabase safely
     check_and_create_default_folders()
     
-    init_session()
     passive_time_check()
     inject_custom_css()
     
