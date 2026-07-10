@@ -1046,7 +1046,164 @@ def render_admin():
     st.markdown("<h2 style='font-weight:800;'>⚙️ Admin Control Panel</h2>", unsafe_allow_html=True)
     st.write("---")
     
-    # Feature 1: Admin User Performance Reports & Feedback Management
+    # Pre-compute available files so they can be referenced inside any alphabetically sorted expander module securely
+    admin_file_options = {f"Basic | {f}": f for f in get_all_csv_files(CSV_FOLDER)}
+    admin_file_options.update({f"Advanced | {f}": f"ADVANCED|{f}" for f in get_all_csv_files(ADVANCED_CSV_FOLDER)})
+
+    # Alphabetical Order: 1. Assessment Access Control
+    with st.expander("⚙️ Assessment Access Control", expanded=False):
+        users = get_all_users()
+        a_col1, a_col2 = st.columns(2)
+        sel_user = a_col1.selectbox("Select Learner", list(users.keys()), key="adm_user")
+        if admin_file_options:
+            sel_test = admin_file_options[a_col2.selectbox("Select Assessment", list(admin_file_options.keys()), key="adm_test")]
+            if sel_user and sel_test:
+                new_limit = st.number_input("Attempts Limit", min_value=1, value=get_attempt_data(sel_user, sel_test)['allowed'])
+                if st.button("Update Limit", type="primary"):
+                    set_allowed_attempts(sel_user, sel_test, new_limit)
+                    st.toast("Updated!", icon="✅")
+
+    # Alphabetical Order: 2. Question Bank Management
+    with st.expander("📁 Question Bank Management", expanded=False):
+        admin_bank = st.radio("Select Question Bank", ["Basic", "Advanced"], horizontal=True, key="admin_bank_radio")
+        if st.session_state.get('last_admin_bank') != admin_bank:
+            st.session_state.admin_current_path = ""
+            st.session_state.last_admin_bank = admin_bank
+        
+        active_admin_base = CSV_FOLDER if admin_bank == "Basic" else ADVANCED_CSV_FOLDER
+        current_admin_path = st.session_state.get('admin_current_path', '')
+        full_admin_path = os.path.join(active_admin_base, current_admin_path.replace('/', os.sep))
+        
+        st.markdown(f"**Current Directory:** `Root / {current_admin_path.replace('/', ' / ')}`")
+        
+        c_up, c_newf, c_upld = st.columns(3)
+        with c_up:
+            if current_admin_path != '': st.button("⬅️ Back / Up", on_click=nav_admin_up, use_container_width=True)
+        with c_newf:
+            new_f = st.text_input("New Folder", key="new_f_input", label_visibility="collapsed", placeholder="Folder Name")
+            if st.button("Create Folder", use_container_width=True):
+                if new_f:
+                    os.makedirs(os.path.join(full_admin_path, new_f), exist_ok=True)
+                    st.toast(f"Created '{new_f}'", icon="✅")
+                    st.rerun()
+        with c_upld:
+            uploaded_file = st.file_uploader("Upload CSV", type=['csv'], label_visibility="collapsed")
+            if uploaded_file:
+                with st.spinner("Uploading..."):
+                    save_path = os.path.join(full_admin_path, uploaded_file.name)
+                    with open(save_path, "wb") as f: f.write(uploaded_file.getbuffer())
+                    st.toast("Uploaded!", icon="✅")
+                    time.sleep(0.5)
+                    st.rerun()
+                
+        st.write("---")
+        items = sorted(os.listdir(full_admin_path)) if os.path.exists(full_admin_path) else []
+        folders = [f for f in items if os.path.isdir(os.path.join(full_admin_path, f))]
+        files = [f for f in items if f.endswith('.csv')]
+        
+        st.markdown("#### Folders")
+        for folder in folders:
+            with st.container(border=True):
+                fc1, fc2, fc3, fc4 = st.columns([3, 4, 2, 2])
+                fc1.button(f"📁 {folder}", key=f"nav_{current_admin_path}_{folder}", on_click=nav_admin_down, args=(folder,), use_container_width=True)
+                if current_admin_path == "" and folder in ["Arts", "Computer", "Current affairs", "Science", "Statistics"]:
+                    fc2.markdown("<div style='padding-top:10px; opacity:0.7; font-size:12px; font-weight:bold;'>Protected</div>", unsafe_allow_html=True)
+                else:
+                    new_fn = fc2.text_input("Rename", value=folder, key=f"ren_fld_{current_admin_path}_{folder}", label_visibility="collapsed")
+                    if fc3.button("✏️ Rename", key=f"rn_btn_{current_admin_path}_{folder}", use_container_width=True):
+                        if new_fn and new_fn.strip() != folder:
+                            try:
+                                os.rename(os.path.join(full_admin_path, folder), os.path.join(full_admin_path, new_fn.strip()))
+                                st.rerun()
+                            except: pass
+                    if fc4.button("🗑️ Delete", key=f"del_f_{current_admin_path}_{folder}", use_container_width=True):
+                        try: os.rmdir(os.path.join(full_admin_path, folder)); st.rerun()
+                        except: st.error("Folder not empty!")
+                        
+        st.write("---")
+        
+        # UI for sorting Files
+        c_ah1, c_ah2 = st.columns([6, 4])
+        c_ah1.markdown("#### Assessments")
+        sort_opt = c_ah2.selectbox("Sort Files By", ["Alphabetical (A–Z)", "Alphabetical (Z–A)", "Upload Date (Newest First)", "Upload Date (Oldest First)"], label_visibility="collapsed", key=f"sort_files_{current_admin_path}")
+        
+        # Apply sorting logically
+        if sort_opt == "Alphabetical (A–Z)":
+            files.sort(key=lambda x: x.lower())
+        elif sort_opt == "Alphabetical (Z–A)":
+            files.sort(key=lambda x: x.lower(), reverse=True)
+        elif sort_opt == "Upload Date (Newest First)":
+            files.sort(key=lambda x: os.path.getmtime(os.path.join(full_admin_path, x)), reverse=True)
+        elif sort_opt == "Upload Date (Oldest First)":
+            files.sort(key=lambda x: os.path.getmtime(os.path.join(full_admin_path, x)))
+
+        all_folders = ["Root"] + [os.path.relpath(os.path.join(r, d), active_admin_base).replace(os.sep, '/') for r, d, _ in os.walk(active_admin_base) for d in d]
+        for f_name in files:
+            file_p = os.path.join(full_admin_path, f_name)
+            with st.container(border=True):
+                c1, c2 = st.columns([8, 2])
+                c1.markdown(f"📄 **{f_name}**")
+                c2.markdown(f"<span style='opacity:0.8;'>{os.path.getsize(file_p)/1024:.1f} KB</span>", unsafe_allow_html=True)
+                mc1, mc2, mc3, mc4 = st.columns([3, 4, 2, 2])
+                tgt = mc1.selectbox("Move", ["-- Select --"] + all_folders, key=f"mov_{current_admin_path}_{f_name}", label_visibility="collapsed")
+                if tgt != "-- Select --":
+                    dest = active_admin_base if tgt == "Root" else os.path.join(active_admin_base, tgt.replace('/', os.sep))
+                    os.rename(file_p, os.path.join(dest, f_name))
+                    st.rerun()
+                new_fn = mc2.text_input("Rename", value=f_name, key=f"ren_f_{current_admin_path}_{f_name}", label_visibility="collapsed")
+                if mc3.button("✏️ Rename", key=f"rn_fbtn_{current_admin_path}_{f_name}", use_container_width=True):
+                    if new_fn and new_fn.strip() != f_name:
+                        cn = new_fn.strip() if new_fn.strip().endswith('.csv') else new_fn.strip() + '.csv'
+                        try: os.rename(file_p, os.path.join(full_admin_path, cn)); st.rerun()
+                        except: pass
+                if mc4.button("🗑️ Delete", key=f"del_{current_admin_path}_{f_name}", use_container_width=True):
+                    os.remove(file_p); st.rerun()
+
+    # Alphabetical Order: 3. Scoring & Penalty Configuration
+    with st.expander("⚖️ Scoring & Penalty Configuration", expanded=False):
+        if admin_file_options:
+            nm_test_key = admin_file_options[st.selectbox("Select Assessment for Penalty", list(admin_file_options.keys()))]
+            new_val = st.number_input("Penalty Value", min_value=0.0, max_value=0.33, value=float(get_neg_mark(nm_test_key)), step=0.01)
+            if st.button("Apply Penalty Rule", type="primary"):
+                set_neg_mark(nm_test_key, new_val)
+                st.toast("Updated!", icon="✅")
+
+    # Alphabetical Order: 4. Timer Configuration
+    with st.expander("⏱️ Timer Configuration", expanded=False):
+        if admin_file_options:
+            sel_display = st.selectbox("Select Assessment", list(admin_file_options.keys()), key="tmr_test")
+            t_file = admin_file_options[sel_display]
+            curr_set = load_timers_data().get(t_file, {"mode": "Total Time", "value": 30})
+            new_mode = st.radio("Timing Rule", ["Total Time", "Per Question", "No Timer"], index=["Total Time", "Per Question", "No Timer"].index(curr_set["mode"]))
+            new_val = st.number_input("Value", min_value=1, value=curr_set.get("value", 30)) if new_mode != "No Timer" else 0
+            if st.button("Save Configuration", type="primary"):
+                td = load_timers_data()
+                td[t_file] = {"mode": new_mode, "value": new_val}
+                save_timers_data(td)
+                st.toast("Updated!", icon="✅")
+
+    # Alphabetical Order: 5. User Management
+    with st.expander("👥 User Management", expanded=False):
+        users = get_all_users()
+        t1, t2, t3 = st.tabs(["Add New", "Remove", "Reset Password"])
+        with t1:
+            new_u = st.text_input("New Username")
+            new_p = st.text_input("Password", type="password")
+            if st.button("Create Account", type="primary"):
+                if new_u in users: st.error("Exists!")
+                elif new_u and new_p: users[new_u] = new_p; save_users(users); st.rerun()
+        with t2:
+            del_u = st.selectbox("Account to Delete", [u for u in users if "Admin" not in u])
+            cf_del = st.checkbox("Confirm deletion")
+            if st.button("Delete Account", type="primary") and cf_del and del_u:
+                del users[del_u]; save_users(users); st.rerun()
+        with t3:
+            ch_u = st.selectbox("Target Account", list(users.keys()))
+            ch_p = st.text_input("New Secure Password", type="password")
+            if st.button("Reset Password", type="primary") and ch_p:
+                users[ch_u] = ch_p; save_users(users); st.toast("Reset!", icon="✅")
+
+    # Alphabetical Order: 6. User Performance Reports
     with st.expander("📊 User Performance Reports", expanded=False):
         history = load_history()
         users = get_all_users()
@@ -1129,142 +1286,6 @@ def render_admin():
                     st.toast("Feedback saved securely!", icon="✅")
         else:
             st.info("No user performance data available yet.")
-
-    with st.expander("📁 Question Bank Management", expanded=False):
-        admin_bank = st.radio("Select Question Bank", ["Basic", "Advanced"], horizontal=True, key="admin_bank_radio")
-        if st.session_state.get('last_admin_bank') != admin_bank:
-            st.session_state.admin_current_path = ""
-            st.session_state.last_admin_bank = admin_bank
-        
-        active_admin_base = CSV_FOLDER if admin_bank == "Basic" else ADVANCED_CSV_FOLDER
-        current_admin_path = st.session_state.get('admin_current_path', '')
-        full_admin_path = os.path.join(active_admin_base, current_admin_path.replace('/', os.sep))
-        
-        st.markdown(f"**Current Directory:** `Root / {current_admin_path.replace('/', ' / ')}`")
-        
-        c_up, c_newf, c_upld = st.columns(3)
-        with c_up:
-            if current_admin_path != '': st.button("⬅️ Back / Up", on_click=nav_admin_up, use_container_width=True)
-        with c_newf:
-            new_f = st.text_input("New Folder", key="new_f_input", label_visibility="collapsed", placeholder="Folder Name")
-            if st.button("Create Folder", use_container_width=True):
-                if new_f:
-                    os.makedirs(os.path.join(full_admin_path, new_f), exist_ok=True)
-                    st.toast(f"Created '{new_f}'", icon="✅")
-                    st.rerun()
-        with c_upld:
-            uploaded_file = st.file_uploader("Upload CSV", type=['csv'], label_visibility="collapsed")
-            if uploaded_file:
-                with st.spinner("Uploading..."):
-                    save_path = os.path.join(full_admin_path, uploaded_file.name)
-                    with open(save_path, "wb") as f: f.write(uploaded_file.getbuffer())
-                    st.toast("Uploaded!", icon="✅")
-                    time.sleep(0.5)
-                    st.rerun()
-                
-        st.write("---")
-        items = sorted(os.listdir(full_admin_path)) if os.path.exists(full_admin_path) else []
-        folders = [f for f in items if os.path.isdir(os.path.join(full_admin_path, f))]
-        files = [f for f in items if f.endswith('.csv')]
-        
-        st.markdown("#### Folders")
-        for folder in folders:
-            with st.container(border=True):
-                fc1, fc2, fc3, fc4 = st.columns([3, 4, 2, 2])
-                fc1.button(f"📁 {folder}", key=f"nav_{current_admin_path}_{folder}", on_click=nav_admin_down, args=(folder,), use_container_width=True)
-                if current_admin_path == "" and folder in ["Arts", "Computer", "Current affairs", "Science", "Statistics"]:
-                    fc2.markdown("<div style='padding-top:10px; opacity:0.7; font-size:12px; font-weight:bold;'>Protected</div>", unsafe_allow_html=True)
-                else:
-                    new_fn = fc2.text_input("Rename", value=folder, key=f"ren_fld_{current_admin_path}_{folder}", label_visibility="collapsed")
-                    if fc3.button("✏️ Rename", key=f"rn_btn_{current_admin_path}_{folder}", use_container_width=True):
-                        if new_fn and new_fn.strip() != folder:
-                            try:
-                                os.rename(os.path.join(full_admin_path, folder), os.path.join(full_admin_path, new_fn.strip()))
-                                st.rerun()
-                            except: pass
-                    if fc4.button("🗑️ Delete", key=f"del_f_{current_admin_path}_{folder}", use_container_width=True):
-                        try: os.rmdir(os.path.join(full_admin_path, folder)); st.rerun()
-                        except: st.error("Folder not empty!")
-                        
-        st.write("---")
-        st.markdown("#### Assessments")
-        all_folders = ["Root"] + [os.path.relpath(os.path.join(r, d), active_admin_base).replace(os.sep, '/') for r, d, _ in os.walk(active_admin_base) for d in d]
-        for f_name in files:
-            file_p = os.path.join(full_admin_path, f_name)
-            with st.container(border=True):
-                c1, c2 = st.columns([8, 2])
-                c1.markdown(f"📄 **{f_name}**")
-                c2.markdown(f"<span style='opacity:0.8;'>{os.path.getsize(file_p)/1024:.1f} KB</span>", unsafe_allow_html=True)
-                mc1, mc2, mc3, mc4 = st.columns([3, 4, 2, 2])
-                tgt = mc1.selectbox("Move", ["-- Select --"] + all_folders, key=f"mov_{current_admin_path}_{f_name}", label_visibility="collapsed")
-                if tgt != "-- Select --":
-                    dest = active_admin_base if tgt == "Root" else os.path.join(active_admin_base, tgt.replace('/', os.sep))
-                    os.rename(file_p, os.path.join(dest, f_name))
-                    st.rerun()
-                new_fn = mc2.text_input("Rename", value=f_name, key=f"ren_f_{current_admin_path}_{f_name}", label_visibility="collapsed")
-                if mc3.button("✏️ Rename", key=f"rn_fbtn_{current_admin_path}_{f_name}", use_container_width=True):
-                    if new_fn and new_fn.strip() != f_name:
-                        cn = new_fn.strip() if new_fn.strip().endswith('.csv') else new_fn.strip() + '.csv'
-                        try: os.rename(file_p, os.path.join(full_admin_path, cn)); st.rerun()
-                        except: pass
-                if mc4.button("🗑️ Delete", key=f"del_{current_admin_path}_{f_name}", use_container_width=True):
-                    os.remove(file_p); st.rerun()
-
-    admin_file_options = {f"Basic | {f}": f for f in get_all_csv_files(CSV_FOLDER)}
-    admin_file_options.update({f"Advanced | {f}": f"ADVANCED|{f}" for f in get_all_csv_files(ADVANCED_CSV_FOLDER)})
-
-    with st.expander("⏱️ Timer Configuration", expanded=False):
-        if admin_file_options:
-            sel_display = st.selectbox("Select Assessment", list(admin_file_options.keys()), key="tmr_test")
-            t_file = admin_file_options[sel_display]
-            curr_set = load_timers_data().get(t_file, {"mode": "Total Time", "value": 30})
-            new_mode = st.radio("Timing Rule", ["Total Time", "Per Question", "No Timer"], index=["Total Time", "Per Question", "No Timer"].index(curr_set["mode"]))
-            new_val = st.number_input("Value", min_value=1, value=curr_set.get("value", 30)) if new_mode != "No Timer" else 0
-            if st.button("Save Configuration", type="primary"):
-                td = load_timers_data()
-                td[t_file] = {"mode": new_mode, "value": new_val}
-                save_timers_data(td)
-                st.toast("Updated!", icon="✅")
-
-    with st.expander("⚙️ Assessment Access Control", expanded=False):
-        users = get_all_users()
-        a_col1, a_col2 = st.columns(2)
-        sel_user = a_col1.selectbox("Select Learner", list(users.keys()), key="adm_user")
-        if admin_file_options:
-            sel_test = admin_file_options[a_col2.selectbox("Select Assessment", list(admin_file_options.keys()), key="adm_test")]
-            if sel_user and sel_test:
-                new_limit = st.number_input("Attempts Limit", min_value=1, value=get_attempt_data(sel_user, sel_test)['allowed'])
-                if st.button("Update Limit", type="primary"):
-                    set_allowed_attempts(sel_user, sel_test, new_limit)
-                    st.toast("Updated!", icon="✅")
-
-    with st.expander("⚖️ Scoring & Penalty Configuration", expanded=False):
-        if admin_file_options:
-            nm_test_key = admin_file_options[st.selectbox("Select Assessment for Penalty", list(admin_file_options.keys()))]
-            new_val = st.number_input("Penalty Value", min_value=0.0, max_value=0.33, value=float(get_neg_mark(nm_test_key)), step=0.01)
-            if st.button("Apply Penalty Rule", type="primary"):
-                set_neg_mark(nm_test_key, new_val)
-                st.toast("Updated!", icon="✅")
-
-    with st.expander("👥 User Management", expanded=False):
-        users = get_all_users()
-        t1, t2, t3 = st.tabs(["Add New", "Remove", "Reset Password"])
-        with t1:
-            new_u = st.text_input("New Username")
-            new_p = st.text_input("Password", type="password")
-            if st.button("Create Account", type="primary"):
-                if new_u in users: st.error("Exists!")
-                elif new_u and new_p: users[new_u] = new_p; save_users(users); st.rerun()
-        with t2:
-            del_u = st.selectbox("Account to Delete", [u for u in users if "Admin" not in u])
-            cf_del = st.checkbox("Confirm deletion")
-            if st.button("Delete Account", type="primary") and cf_del and del_u:
-                del users[del_u]; save_users(users); st.rerun()
-        with t3:
-            ch_u = st.selectbox("Target Account", list(users.keys()))
-            ch_p = st.text_input("New Secure Password", type="password")
-            if st.button("Reset Password", type="primary") and ch_p:
-                users[ch_u] = ch_p; save_users(users); st.toast("Reset!", icon="✅")
 
 def render_dashboard_practice():
     st.markdown("<h3 style='margin-bottom:15px; font-weight:800;'>📋 Available Test Series</h3>", unsafe_allow_html=True)
@@ -1438,6 +1459,17 @@ def render_instructions():
     with col2:
         with st.container(border=True):
             st.markdown("### Assessment Guidelines")
+            
+            # Fetch current attempt counts logically to display to the user before they begin
+            att_data = get_attempt_data(st.session_state.current_user, st.session_state.current_test_filename)
+            used = att_data.get('used', 0)
+            allowed = att_data.get('allowed', 2)
+            curr_att = used + 1
+            if allowed >= 99:
+                st.markdown(f"🔹 **Attempt Number:** Attempt {curr_att} (Unlimited Attempts)")
+            else:
+                st.markdown(f"🔹 **Attempt Number:** Attempt {curr_att} of {allowed}")
+                
             st.markdown(f"🔹 **Total Questions:** {len(st.session_state.questions)}")
             st.markdown(f"🔹 **Time Limit:** {st.session_state.time_val} Min" if st.session_state.timer_mode != "No Timer" else "🔹 **Time Limit:** None")
             nm = get_neg_mark(st.session_state.current_test_filename)
@@ -1617,14 +1649,23 @@ def render_exam():
                 idx = q_data['options'].index(saved_ans) if saved_ans in q_data['options'] else None
                 st.radio("Options:", options=q_data['options'], index=idx, key=f"radio_ans_{q_idx}", on_change=on_radio_change, args=(q_idx,), label_visibility="collapsed")
         
-        st.write("<div style='height:0.75rem;'></div>", unsafe_allow_html=True)
-        b_col1, b_col2, b_col3, b_col4 = st.columns([1.5, 1.5, 2.5, 1.5])
-        b_col1.button("⏪ Previous", on_click=nav_prev, use_container_width=True)
-        b_col2.button("🧹 Clear", on_click=clear_answer, args=(q_idx,), use_container_width=True)
+        st.write("<div style='height:0.5rem;'></div>", unsafe_allow_html=True)
         is_cur_marked = q_idx in st.session_state.marked_questions
-        b_col3.button("🚩 Unmark" if is_cur_marked else "🚩 Mark for Review", on_click=toggle_mark, args=(q_idx,), use_container_width=True)
-        if q_idx == total_q - 1: b_col4.button("Finish", disabled=True, use_container_width=True)
-        else: b_col4.button("Next ⏩", type="primary", on_click=nav_next, use_container_width=True)
+        
+        # Response / Action Buttons Layout Relocation
+        act_col1, act_col2 = st.columns(2)
+        act_col1.button("🧹 Clear Response", on_click=clear_answer, args=(q_idx,), use_container_width=True)
+        act_col2.button("🚩 Unmark" if is_cur_marked else "🚩 Mark for Review", on_click=toggle_mark, args=(q_idx,), use_container_width=True)
+        
+        st.write("<div style='height:0.25rem;'></div>", unsafe_allow_html=True)
+        
+        # Question Navigation Layout Relocation
+        nav_col1, nav_col2 = st.columns(2)
+        nav_col1.button("⏪ Previous Question", on_click=nav_prev, use_container_width=True)
+        if q_idx == total_q - 1: 
+            nav_col2.button("Finish Test", disabled=True, use_container_width=True)
+        else: 
+            nav_col2.button("Next Question ⏩", type="primary", on_click=nav_next, use_container_width=True)
 
 def render_result():
     history = load_history().get(st.session_state.current_user, [])
