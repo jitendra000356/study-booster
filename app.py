@@ -9,6 +9,7 @@ import json
 import pickle
 import uuid
 import math
+import io
 from supabase import create_client, Client
 
 # ==========================================
@@ -33,29 +34,10 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Folder Structure
-CSV_FOLDER = 'saved_csvs'
-ADVANCED_CSV_FOLDER = 'advanced_csvs'
+# Initialize Session Folder for Pause/Resume Persistence
 SESSION_FOLDER = 'active_sessions'
-
-for folder in [CSV_FOLDER, ADVANCED_CSV_FOLDER, SESSION_FOLDER]:
-    if not os.path.exists(folder):
-        os.makedirs(folder)
-
-# Initialize Default Category Folders
-DEFAULT_STRUCTURE = {
-    "Science": ["Physics", "Chemistry", "Biology", "Environment"],
-    "Arts": ["History", "Polity", "Geography", "Economics"],
-    "Statistics": [],
-    "Current affairs": []
-}
-
-for base_folder in [CSV_FOLDER, ADVANCED_CSV_FOLDER]:
-    for root_cat, sub_cats in DEFAULT_STRUCTURE.items():
-        root_path = os.path.join(base_folder, root_cat)
-        os.makedirs(root_path, exist_ok=True)
-        for sub_cat in sub_cats:
-            os.makedirs(os.path.join(root_path, sub_cat), exist_ok=True)
+if not os.path.exists(SESSION_FOLDER):
+    os.makedirs(SESSION_FOLDER)
 
 # ==========================================
 # DATA MANAGEMENT FUNCTIONS (CLOUD BASED)
@@ -239,17 +221,22 @@ def set_allowed_attempts(user, test_file, allowed_count):
     except Exception as e:
         print(f"Error setting allowed attempts: {e}")
 
-# ------------------------------------
-
+# --- CLOUD CSV QUESTION BANK FUNCTIONS ---
 @st.cache_data(ttl=2)
-def get_all_csv_files(base_dir=CSV_FOLDER):
-    csv_files = []
-    for root, dirs, files in os.walk(base_dir):
-        for f in files:
-            if f.endswith('.csv'):
-                rel_path = os.path.relpath(os.path.join(root, f), base_dir)
-                csv_files.append(rel_path.replace(os.sep, '/'))
-    return sorted(csv_files)
+def get_all_csv_files(bank_type):
+    try:
+        res = supabase.table('question_banks').select('folder_path, file_name').eq('bank_type', bank_type).execute()
+        files = []
+        for r in res.data:
+            if r['file_name'] == '.keep': continue
+            if r['folder_path'] == 'Root':
+                files.append(r['file_name'])
+            else:
+                files.append(f"{r['folder_path']}/{r['file_name']}")
+        return sorted(files)
+    except Exception as e:
+        print(f"Error fetching CSVs: {e}")
+        return []
 
 def nav_admin_up():
     curr = st.session_state.admin_current_path
@@ -326,7 +313,6 @@ def record_detailed_attempt(user, test_key, original_file):
         "q_details": q_details
     }
 
-    # --- SUPABASE CLOUD INSERTION ---
     try:
         supabase_data = {
             "username": user,
@@ -347,7 +333,6 @@ def record_detailed_attempt(user, test_key, original_file):
         supabase.table("test_results").insert(supabase_data).execute()
     except Exception as e:
         print(f"Failed to sync result to Supabase: {e}")
-    # --------------------------------
 
 def record_attempt_usage():
     if not st.session_state.get('attempt_recorded', False):
@@ -358,7 +343,6 @@ def record_attempt_usage():
             increment_attempt(user, test_key)
             record_detailed_attempt(user, test_key, original_file)
             
-            # Fetch fresh index from cloud to ensure UI navigation knows where to go
             try:
                 res = supabase.table('test_results').select('id').eq('username', user).execute()
                 st.session_state.history_view_index = len(res.data) - 1
@@ -445,16 +429,26 @@ def record_activity():
 # 4. EXAM CONTROL & LOGIC FUNCTIONS
 # ==========================================
 def load_quiz(file_name):
-    with st.spinner(f"Configuring {os.path.basename(file_name)} engine..."):
+    with st.spinner(f"Configuring {os.path.basename(file_name)} engine from Cloud..."):
         st.session_state.questions = []
         bank = st.session_state.get('current_bank', 'Basic')
-        base_dir = CSV_FOLDER if bank == 'Basic' else ADVANCED_CSV_FOLDER
-        file_path = os.path.join(base_dir, file_name.replace('/', os.sep))
         
+        parts = file_name.split('/')
+        fname = parts[-1]
+        folder_path = '/'.join(parts[:-1]) if len(parts) > 1 else 'Root'
         test_key = file_name if bank == 'Basic' else f"ADVANCED|{file_name}"
         
-        with open(file_path, 'r', encoding='utf-8-sig', errors='ignore') as f:
+        try:
+            res = supabase.table('question_banks').select('csv_data').eq('bank_type', bank).eq('folder_path', folder_path).eq('file_name', fname).execute()
+            if not res.data:
+                st.error("Assessment data not found in Cloud.")
+                time.sleep(2)
+                st.rerun()
+            
+            csv_data = res.data[0]['csv_data']
+            f = io.StringIO(csv_data)
             reader = csv.DictReader(f)
+            
             for row in reader:
                 raw_type = row.get('Type')
                 q_type = str(raw_type).strip().lower() if raw_type else ''
@@ -489,6 +483,9 @@ def load_quiz(file_name):
                         'type': 'mcq', 'q': str(q_text).strip() if q_text else '', 
                         'options': opts, 'ans': int(ans_str) - 1 if ans_str.isdigit() else -1
                     })
+        except Exception as e:
+            st.error(f"Error parsing Cloud File: {e}")
+            st.stop()
                 
         t_config = get_timer_config(test_key)
         
@@ -797,8 +794,8 @@ def render_admin():
     st.markdown("<h2 style='font-weight:800;'>⚙️ Admin Control Panel</h2>", unsafe_allow_html=True)
     st.write("---")
     
-    admin_file_options = {f"Basic | {f}": f for f in get_all_csv_files(CSV_FOLDER)}
-    admin_file_options.update({f"Advanced | {f}": f"ADVANCED|{f}" for f in get_all_csv_files(ADVANCED_CSV_FOLDER)})
+    admin_file_options = {f"Basic | {f}": f for f in get_all_csv_files("Basic")}
+    admin_file_options.update({f"Advanced | {f}": f"ADVANCED|{f}" for f in get_all_csv_files("Advanced")})
 
     with st.expander("⚙️ Assessment Access Control", expanded=False):
         users = get_all_users()
@@ -812,83 +809,128 @@ def render_admin():
                     set_allowed_attempts(sel_user, sel_test, new_limit)
                     st.toast("Updated!", icon="✅")
 
-    with st.expander("📁 Question Bank Management", expanded=False):
+    with st.expander("📁 Question Bank Management (Cloud DB)", expanded=False):
         admin_bank = st.radio("Select Question Bank", ["Basic", "Advanced"], horizontal=True, key="admin_bank_radio")
         if st.session_state.get('last_admin_bank') != admin_bank:
-            st.session_state.admin_current_path = ""; st.session_state.last_admin_bank = admin_bank
+            st.session_state.admin_current_path = "Root"; st.session_state.last_admin_bank = admin_bank
         
-        active_admin_base = CSV_FOLDER if admin_bank == "Basic" else ADVANCED_CSV_FOLDER
-        current_admin_path = st.session_state.get('admin_current_path', '')
-        full_admin_path = os.path.join(active_admin_base, current_admin_path.replace('/', os.sep))
-        st.markdown(f"**Current Directory:** `Root / {current_admin_path.replace('/', ' / ')}`")
+        current_path = st.session_state.get('admin_current_path') or 'Root'
+        st.markdown(f"**Current Directory:** ` {current_path.replace('/', ' / ')} `")
         
         c_up, c_newf, c_upld = st.columns(3)
         with c_up:
-            if current_admin_path != '': st.button("⬅️ Back / Up", on_click=nav_admin_up, use_container_width=True)
+            if current_path != 'Root': 
+                st.button("⬅️ Back / Up", on_click=nav_admin_up, use_container_width=True)
         with c_newf:
             new_f = st.text_input("New Folder", key="new_f_input", label_visibility="collapsed", placeholder="Folder Name")
             if st.button("Create Folder", use_container_width=True):
                 if new_f:
-                    os.makedirs(os.path.join(full_admin_path, new_f), exist_ok=True)
+                    new_fp = new_f.strip() if current_path == 'Root' else f"{current_path}/{new_f.strip()}"
+                    supabase.table('question_banks').insert({
+                        'bank_type': admin_bank, 'folder_path': new_fp, 'file_name': '.keep', 'csv_data': ''
+                    }).execute()
                     st.toast(f"Created '{new_f}'", icon="✅"); st.rerun()
         with c_upld:
             uploaded_file = st.file_uploader("Upload CSV", type=['csv'], label_visibility="collapsed")
             if uploaded_file:
-                with st.spinner("Uploading..."):
-                    with open(os.path.join(full_admin_path, uploaded_file.name), "wb") as f: f.write(uploaded_file.getbuffer())
-                    st.toast("Uploaded!", icon="✅"); time.sleep(0.5); st.rerun()
+                with st.spinner("Uploading to Database..."):
+                    content = uploaded_file.getvalue().decode('utf-8-sig', errors='ignore')
+                    supabase.table('question_banks').insert({
+                        'bank_type': admin_bank, 'folder_path': current_path, 
+                        'file_name': uploaded_file.name, 'csv_data': content
+                    }).execute()
+                    st.toast("Uploaded securely to Cloud!", icon="✅"); time.sleep(0.5); st.rerun()
                 
         st.write("---")
-        items = sorted(os.listdir(full_admin_path)) if os.path.exists(full_admin_path) else []
-        folders = [f for f in items if os.path.isdir(os.path.join(full_admin_path, f))]
-        files = [f for f in items if f.endswith('.csv')]
+        
+        # Fetch cloud files for current bank
+        res = supabase.table('question_banks').select('id, folder_path, file_name, created_at, csv_data').eq('bank_type', admin_bank).execute()
+        records = res.data
+        
+        subfolders = set()
+        files = []
+        
+        for r in records:
+            fp = r['folder_path']
+            if current_path == 'Root':
+                if fp == 'Root':
+                    if r['file_name'] != '.keep': files.append(r)
+                else:
+                    subfolders.add(fp.split('/')[0])
+            else:
+                if fp == current_path:
+                    if r['file_name'] != '.keep': files.append(r)
+                elif fp.startswith(current_path + '/'):
+                    remainder = fp[len(current_path)+1:]
+                    subfolders.add(remainder.split('/')[0])
+
+        subfolders = sorted(list(subfolders))
         
         st.markdown("#### Folders")
-        for folder in folders:
+        for folder in subfolders:
             with st.container(border=True):
                 fc1, fc2, fc3, fc4 = st.columns([3, 4, 2, 2])
-                fc1.button(f"📁 {folder}", key=f"nav_{current_admin_path}_{folder}", on_click=nav_admin_down, args=(folder,), use_container_width=True)
-                if current_admin_path == "" and folder in ["Arts", "Computer", "Current affairs", "Science", "Statistics"]:
-                    fc2.markdown("<div style='padding-top:10px; opacity:0.7; font-size:12px; font-weight:bold;'>Protected</div>", unsafe_allow_html=True)
-                else:
-                    new_fn = fc2.text_input("Rename", value=folder, key=f"ren_fld_{current_admin_path}_{folder}", label_visibility="collapsed")
-                    if fc3.button("✏️ Rename", key=f"rn_btn_{current_admin_path}_{folder}", use_container_width=True):
-                        if new_fn and new_fn.strip() != folder:
-                            try: os.rename(os.path.join(full_admin_path, folder), os.path.join(full_admin_path, new_fn.strip())); st.rerun()
-                            except: pass
-                    if fc4.button("🗑️ Delete", key=f"del_f_{current_admin_path}_{folder}", use_container_width=True):
-                        try: os.rmdir(os.path.join(full_admin_path, folder)); st.rerun()
-                        except: st.error("Folder not empty!")
+                fc1.button(f"📁 {folder}", key=f"nav_{current_path}_{folder}", on_click=nav_admin_down, args=(f"Root/{folder}" if current_path=='Root' else f"{current_path}/{folder}",), use_container_width=True)
+                
+                new_fn = fc2.text_input("Rename", value=folder, key=f"ren_fld_{current_path}_{folder}", label_visibility="collapsed")
+                if fc3.button("✏️ Rename", key=f"rn_btn_{current_path}_{folder}", use_container_width=True):
+                    if new_fn and new_fn.strip() != folder:
+                        old_prefix = folder if current_path == 'Root' else f"{current_path}/{folder}"
+                        new_prefix = new_fn.strip() if current_path == 'Root' else f"{current_path}/{new_fn.strip()}"
+                        for r in records:
+                            rfp = r['folder_path']
+                            if rfp == old_prefix:
+                                supabase.table('question_banks').update({'folder_path': new_prefix}).eq('id', r['id']).execute()
+                            elif rfp.startswith(old_prefix + '/'):
+                                new_fp = rfp.replace(old_prefix, new_prefix, 1)
+                                supabase.table('question_banks').update({'folder_path': new_fp}).eq('id', r['id']).execute()
+                        st.rerun()
+                if fc4.button("🗑️ Delete", key=f"del_f_{current_path}_{folder}", use_container_width=True):
+                    old_prefix = folder if current_path == 'Root' else f"{current_path}/{folder}"
+                    for r in records:
+                        rfp = r['folder_path']
+                        if rfp == old_prefix or rfp.startswith(old_prefix + '/'):
+                            supabase.table('question_banks').delete().eq('id', r['id']).execute()
+                    st.rerun()
                         
         st.write("---")
         c_ah1, c_ah2 = st.columns([6, 4])
         c_ah1.markdown("#### Assessments")
-        sort_opt = c_ah2.selectbox("Sort Files By", ["Alphabetical (A–Z)", "Alphabetical (Z–A)", "Upload Date (Newest First)", "Upload Date (Oldest First)"], label_visibility="collapsed", key=f"sort_files_{current_admin_path}")
-        if sort_opt == "Alphabetical (A–Z)": files.sort(key=lambda x: x.lower())
-        elif sort_opt == "Alphabetical (Z–A)": files.sort(key=lambda x: x.lower(), reverse=True)
-        elif sort_opt == "Upload Date (Newest First)": files.sort(key=lambda x: os.path.getmtime(os.path.join(full_admin_path, x)), reverse=True)
-        elif sort_opt == "Upload Date (Oldest First)": files.sort(key=lambda x: os.path.getmtime(os.path.join(full_admin_path, x)))
+        sort_opt = c_ah2.selectbox("Sort Files By", ["Alphabetical (A–Z)", "Alphabetical (Z–A)", "Upload Date (Newest First)", "Upload Date (Oldest First)"], label_visibility="collapsed", key=f"sort_files_{current_path}")
+        
+        if sort_opt == "Alphabetical (A–Z)": files.sort(key=lambda x: x['file_name'].lower())
+        elif sort_opt == "Alphabetical (Z–A)": files.sort(key=lambda x: x['file_name'].lower(), reverse=True)
+        elif sort_opt == "Upload Date (Newest First)": files.sort(key=lambda x: x['created_at'], reverse=True)
+        elif sort_opt == "Upload Date (Oldest First)": files.sort(key=lambda x: x['created_at'])
 
-        all_folders = ["Root"] + [os.path.relpath(os.path.join(r, d), active_admin_base).replace(os.sep, '/') for r, d, _ in os.walk(active_admin_base) for d in d]
-        for f_name in files:
-            file_p = os.path.join(full_admin_path, f_name)
+        all_folders = ["Root"] + sorted(list(set(r['folder_path'] for r in records if r['folder_path'] != 'Root')))
+        
+        for f_data in files:
+            file_id = f_data['id']
+            f_name = f_data['file_name']
+            file_size_kb = len(f_data['csv_data'].encode('utf-8')) / 1024
+            
             with st.container(border=True):
                 c1, c2 = st.columns([8, 2])
                 c1.markdown(f"📄 **{f_name}**")
-                c2.markdown(f"<span style='opacity:0.8;'>{os.path.getsize(file_p)/1024:.1f} KB</span>", unsafe_allow_html=True)
+                c2.markdown(f"<span style='opacity:0.8;'>{file_size_kb:.1f} KB</span>", unsafe_allow_html=True)
                 mc1, mc2, mc3, mc4 = st.columns([3, 4, 2, 2])
-                tgt = mc1.selectbox("Move", ["-- Select --"] + all_folders, key=f"mov_{current_admin_path}_{f_name}", label_visibility="collapsed")
+                
+                tgt = mc1.selectbox("Move", ["-- Select --"] + all_folders, key=f"mov_{file_id}", label_visibility="collapsed")
                 if tgt != "-- Select --":
-                    dest = active_admin_base if tgt == "Root" else os.path.join(active_admin_base, tgt.replace('/', os.sep))
-                    os.rename(file_p, os.path.join(dest, f_name)); st.rerun()
-                new_fn = mc2.text_input("Rename", value=f_name, key=f"ren_f_{current_admin_path}_{f_name}", label_visibility="collapsed")
-                if mc3.button("✏️ Rename", key=f"rn_fbtn_{current_admin_path}_{f_name}", use_container_width=True):
+                    supabase.table('question_banks').update({'folder_path': tgt}).eq('id', file_id).execute()
+                    st.rerun()
+                
+                new_fn = mc2.text_input("Rename", value=f_name, key=f"ren_f_{file_id}", label_visibility="collapsed")
+                if mc3.button("✏️ Rename", key=f"rn_fbtn_{file_id}", use_container_width=True):
                     if new_fn and new_fn.strip() != f_name:
                         cn = new_fn.strip() if new_fn.strip().endswith('.csv') else new_fn.strip() + '.csv'
-                        try: os.rename(file_p, os.path.join(full_admin_path, cn)); st.rerun()
-                        except: pass
-                if mc4.button("🗑️ Delete", key=f"del_{current_admin_path}_{f_name}", use_container_width=True):
-                    os.remove(file_p); st.rerun()
+                        supabase.table('question_banks').update({'file_name': cn}).eq('id', file_id).execute()
+                        st.rerun()
+                
+                if mc4.button("🗑️ Delete", key=f"del_{file_id}", use_container_width=True):
+                    supabase.table('question_banks').delete().eq('id', file_id).execute()
+                    st.rerun()
 
     with st.expander("⚖️ Scoring & Penalty Configuration", expanded=False):
         if admin_file_options:
@@ -1022,22 +1064,23 @@ def render_dashboard_practice():
     st.markdown("<h3 style='margin-bottom:15px; font-weight:800;'>📋 Available Test Series</h3>", unsafe_allow_html=True)
     st.session_state.current_bank = st.radio("Question Bank", ["Basic", "Advanced"], horizontal=True, label_visibility="collapsed")
     
-    active_base = CSV_FOLDER if st.session_state.current_bank == "Basic" else ADVANCED_CSV_FOLDER
+    active_base = st.session_state.current_bank
     all_files = get_all_csv_files(active_base)
     
     search_q = st.text_input("🔍 Search Subject or Folder...", placeholder="e.g. Physics, Mock 1...").strip().lower()
     if search_q: files_to_disp = [f for f in all_files if search_q in f.lower()]
     else:
         c1, c2 = st.columns(2)
-        root_flds = sorted([d for d in os.listdir(active_base) if os.path.isdir(os.path.join(active_base, d))])
-        sel_cat = c1.selectbox("Category", root_flds) if root_flds else None
-        if sel_cat:
-            cat_p = os.path.join(active_base, sel_cat)
-            sub_flds = sorted([d for d in os.listdir(cat_p) if os.path.isdir(os.path.join(cat_p, d))])
+        root_flds = sorted(list(set(f.split('/')[0] for f in all_files if '/' in f)))
+        sel_cat = c1.selectbox("Category", ["All"] + root_flds) if root_flds else "All"
+        
+        if sel_cat != "All":
+            sub_flds = sorted(list(set(f.split('/')[1] for f in all_files if f.startswith(sel_cat + '/') and f.count('/') > 1)))
             sel_sub = c2.selectbox("Subcategory", ["All"] + sub_flds) if sub_flds else "All"
-            prefix = sel_cat if sel_sub == "All" else f"{sel_cat}/{sel_sub}"
+            prefix = sel_cat + '/' if sel_sub == "All" else f"{sel_cat}/{sel_sub}/"
             files_to_disp = [f for f in all_files if f.startswith(prefix)]
-        else: files_to_disp = []
+        else: 
+            files_to_disp = all_files
 
     st.write("<br>", unsafe_allow_html=True)
     if not files_to_disp: st.info("No assessments found matching criteria.")
@@ -1312,7 +1355,6 @@ def render_exam():
             else: act_cols[3].button("Next", type="primary", on_click=nav_next, use_container_width=True)
 
 def render_result():
-    # Cloud Fetch - Pulls result specifically for this user
     history = get_supabase_history(st.session_state.current_user)
     
     if not history:
