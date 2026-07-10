@@ -609,6 +609,35 @@ UI_COLORS = {
     "danger": "#dc2626",
 }
 
+def render_page_header(title, subtitle=None, eyebrow=None):
+    """Render a consistent, presentation-only page header."""
+    eyebrow_html = f"<p class='page-eyebrow'>{eyebrow}</p>" if eyebrow else ""
+    subtitle_html = f"<p class='page-subtitle'>{subtitle}</p>" if subtitle else ""
+    st.markdown(
+        f"""
+        <section class="page-header">
+            {eyebrow_html}
+            <h1>{title}</h1>
+            {subtitle_html}
+        </section>
+        """,
+        unsafe_allow_html=True,
+    )
+
+def render_metric_card(label, value, accent="blue", helper_text=None):
+    """Render a reusable result or reporting metric without changing its value."""
+    helper_html = f"<p>{helper_text}</p>" if helper_text else ""
+    st.markdown(
+        f"""
+        <div class="metric-card metric-{accent}">
+            <span>{label}</span>
+            <strong>{value}</strong>
+            {helper_html}
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
 def inject_custom_css():
     try:
         with open('bg.jpg', "rb") as image_file:
@@ -706,6 +735,38 @@ def inject_custom_css():
             border-radius: 0 10px 10px 0 !important;
         }}
 
+        /* Shared page structure */
+        .page-header {{
+            margin: 0 0 2rem;
+            padding: 1.75rem 2rem;
+            border: 1px solid rgba(226, 232, 240, 0.8);
+            border-radius: 16px;
+            background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+        }}
+        .page-header h1 {{
+            margin: 0 !important;
+            color: var(--sb-ink) !important;
+            font-size: clamp(1.75rem, 3.5vw, 2.5rem) !important;
+            letter-spacing: -0.025em;
+            line-height: 1.2;
+            font-weight: 800;
+        }}
+        .page-eyebrow {{
+            margin: 0 0 0.5rem !important;
+            color: var(--sb-primary) !important;
+            font-size: 0.85rem;
+            font-weight: 700;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+        }}
+        .page-subtitle {{
+            margin: 0.5rem 0 0 !important;
+            color: var(--sb-muted) !important;
+            font-size: 1.05rem;
+            line-height: 1.5;
+        }}
+
         /* Buttons and Cards */
         div.stButton > button {{
             min-height: 2.8rem; border-radius: 12px; font-weight: 600; font-size: 0.95rem;
@@ -734,6 +795,13 @@ def inject_custom_css():
         .metric-card:hover {{ transform: translateY(-4px); box-shadow: 0 12px 20px -5px rgba(0, 0, 0, 0.08); }}
         .metric-card span {{ display: block; color: #64748b !important; font-size: 0.8rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; }}
         .metric-card strong {{ display: block; margin-top: 0.4rem; color: #0f172a; font-size: clamp(1.4rem, 2vw, 1.8rem); font-weight: 800; }}
+        .metric-card p {{ margin: 0.5rem 0 0 !important; color: #64748b !important; font-size: 0.85rem; }}
+        
+        .metric-blue {{ --metric-accent: #3b82f6; }}
+        .metric-green {{ --metric-accent: #10b981; }}
+        .metric-red {{ --metric-accent: #ef4444; }}
+        .metric-amber {{ --metric-accent: #f59e0b; }}
+        .metric-purple {{ --metric-accent: #8b5cf6; }}
         
         /* Motivational Banner */
         .motivational-banner {{
