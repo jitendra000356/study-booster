@@ -8,7 +8,6 @@ import re
 import json
 import pickle
 import uuid
-import math
 
 # ==========================================
 # 1. CONFIGURATION & CONSTANTS
@@ -670,6 +669,7 @@ def inject_custom_css():
         }}
 
         html, body, [class*="css"]  {{ font-family: 'Inter', sans-serif; }}
+        html {{ color-scheme: light dark; }}
         .stApp {{ color: var(--sb-ink); }}
         header[data-testid="stHeader"] {{ background: transparent !important; }}
         
@@ -677,11 +677,11 @@ def inject_custom_css():
             max-width: 1400px !important;
             padding: clamp(1rem, 3vw, 2.5rem) !important;
             margin: 1.5rem auto !important;
-            min-height: calc(100vh - 4rem);
+            box-sizing: border-box;
+            min-height: calc(100vh - 3rem);
             border: 1px solid rgba(226, 232, 240, 0.85);
             border-radius: 20px;
-            background: rgba(255, 255, 255, 0.96) !important;
-            backdrop-filter: blur(10px);
+            background: #ffffff !important;
             box-shadow: 0 25px 50px -12px rgba(15, 23, 42, 0.15);
             animation: fadeIn 0.4s ease-out forwards;
         }}
@@ -811,24 +811,9 @@ def inject_custom_css():
         /* Assessment list contrast */
         .available-tests-title, .assessment-title {{ color: #0f172a !important; }}
         .assessment-meta {{ color: #475569 !important; }}
-
-        /* Dark Mode Adjustments */
         @media (prefers-color-scheme: dark) {{
-            .block-container {{ background: rgba(15, 23, 42, 0.96) !important; border-color: rgba(51, 65, 85, 0.85); }}
-            .available-tests-title, .assessment-title, h1, h2, h3, h4, h5, h6, p, span, label, div {{ color: #e2e8f0 !important; text-shadow: none !important; }}
-            .assessment-meta {{ color: #94a3b8 !important; }}
-            .page-header {{ background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); border-color: #334155; }}
-            .edtech-profile-card {{ background: rgba(30, 41, 59, 0.8); border-color: rgba(99, 102, 241, 0.4); }}
-            .edtech-profile-info strong {{ color: #f8fafc !important; }}
-            .metric-card {{ background: #1e293b; border-color: #334155; }}
-            .metric-card span, .metric-card strong, .metric-card p {{ color: #f8fafc !important; }}
-            .exam-motivation-banner {{ background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); border-color: #334155; }}
-            .question-card__text, .question-card__number {{ color: #f8fafc !important; }}
-            /* Specific fix for radio and selectbox text in dark mode */
-            .stRadio > label > div, .stSelectbox > label > div {{ color: #f8fafc !important; }}
-            div[role="radiogroup"] label {{ color: #f8fafc !important; }}
-            div[data-testid="stMarkdownContainer"] p {{ color: #f8fafc !important; }}
-            .st-ae {{ background-color: transparent !important; }} 
+            .available-tests-title, .assessment-title {{ color: #f8fafc !important; }}
+            .assessment-meta {{ color: #cbd5e1 !important; }}
         }}
 
         /* Compact live-assessment controls */
@@ -847,6 +832,56 @@ def inject_custom_css():
         div[data-testid="stVerticalBlockBorderWrapper"]:has(.palette-title) div.stButton > button {{
             min-height: 2.4rem;
             font-size: 0.9rem;
+        }}
+
+        /* Dark-mode contrast: keep every interactive surface readable without blur. */
+        @media (prefers-color-scheme: dark) {{
+            :root {{
+                --sb-ink: #f8fafc;
+                --sb-muted: #cbd5e1;
+                --sb-surface: #1e293b;
+                --sb-border: #475569;
+            }}
+            .stApp {{ background-color: #020617 !important; color: #e2e8f0 !important; }}
+            .block-container, [data-testid="stMainBlockContainer"] {{
+                background: #0f172a !important;
+                border-color: #334155 !important;
+                box-shadow: 0 18px 38px -18px rgba(0, 0, 0, 0.7) !important;
+            }}
+            section[data-testid="stSidebar"] {{
+                background: #111827 !important;
+                border-color: #334155 !important;
+            }}
+            section[data-testid="stSidebar"] * {{ color: #e2e8f0 !important; }}
+            .edtech-profile-card {{ background: #1e293b !important; border-color: #475569 !important; }}
+            .edtech-profile-info strong {{ color: #f8fafc !important; }}
+            .edtech-profile-info span {{ color: #cbd5e1 !important; }}
+            .page-header, .metric-card, div[data-testid="stVerticalBlockBorderWrapper"], div[data-testid="stAlert"] {{
+                background: #1e293b !important;
+                border-color: #475569 !important;
+            }}
+            .page-header h1, .metric-card strong, .palette-title {{ color: #f8fafc !important; }}
+            .page-subtitle, .metric-card span, .metric-card p {{ color: #cbd5e1 !important; }}
+            div.stButton > button {{
+                background: #1e293b !important;
+                border-color: #64748b !important;
+                color: #f8fafc !important;
+            }}
+            div.stButton > button:hover:not(:disabled) {{ background: #334155 !important; border-color: #94a3b8 !important; }}
+            div.stButton > button[kind="primary"], div.stButton > button[kind="primary"]:hover:not(:disabled) {{ color: #ffffff !important; }}
+            div[data-baseweb="input"], div[data-baseweb="select"] > div, textarea {{
+                background-color: #0f172a !important;
+                border-color: #64748b !important;
+                color: #f8fafc !important;
+            }}
+            div[data-baseweb="input"] input, div[data-baseweb="select"] *, textarea, label,
+            [data-testid="stWidgetLabel"] p, [data-testid="stCaptionContainer"], [data-testid="stMarkdownContainer"] p {{
+                color: #e2e8f0 !important;
+            }}
+            table, th, td {{ background: #1e293b !important; border-color: #475569 !important; color: #e2e8f0 !important; }}
+            .exam-session-summary {{ background: #1e293b !important; border-color: #475569 !important; }}
+            .exam-session-summary span {{ color: #e2e8f0 !important; }}
+            .exam-section-label {{ background: #172554 !important; color: #bfdbfe !important; }}
         }}
         
         /* Pre-exam motivational banner */
@@ -956,14 +991,14 @@ def render_visual_timer():
         <style>
             body {{ margin:0; padding:0; font-family: Inter, sans-serif; background: transparent; }}
             .timer-box {{
-                box-sizing: border-box; min-height: 32px; padding: 4px 8px;
-                border: 1px solid #fecaca; border-radius: 8px;
+                box-sizing: border-box; min-height: 44px; padding: 7px 10px;
+                border: 1px solid #fecaca; border-radius: 10px;
                 background: linear-gradient(135deg, #fff5f5, #fff1f2);
-                color: #e11d48; font-size: 15px; font-weight: 700; text-align: center;
-                display: flex; align-items: center; justify-content: center; gap: 6px;
-                box-shadow: 0 2px 5px rgba(225, 29, 72, 0.05);
+                color: #e11d48; font-size: 18px; font-weight: 800; text-align: center;
+                display: flex; align-items: center; justify-content: center; gap: 8px;
+                box-shadow: 0 3px 8px rgba(225, 29, 72, 0.08);
             }}
-            .no-timer {{ background: #f0f9ff; border-color: #bae6fd; color: #0284c7; font-size: 13px; }}
+            .no-timer {{ background: #f0f9ff; border-color: #bae6fd; color: #0284c7; font-size: 14px; }}
         </style>
     </head>
     <body>
@@ -990,7 +1025,7 @@ def render_visual_timer():
     </body>
     </html>
     """
-    components.html(html_code, height=40)
+    components.html(html_code, height=55)
 
 # ==========================================
 # 6. PAGE RENDERING FUNCTIONS
@@ -1489,25 +1524,25 @@ def render_exam():
         with st.container(border=True):
             st.markdown("<p class='palette-title'>Exam Controls & Timer</p>", unsafe_allow_html=True)
             render_visual_timer()
-            st.write("<div style='margin-top:6px;'></div>", unsafe_allow_html=True)
+            st.write("<div style='margin-top:4px;'></div>", unsafe_allow_html=True)
             st.button("⏸ Pause Exam", type="secondary", on_click=pause_exam, use_container_width=True)
             
             udisp = st.session_state.current_user.split()[0]
             html_legend = f"""
-            <div style="background:#fff; padding:6px; border:1px solid #e2e8f0; border-radius:8px; margin:6px 0; box-shadow:0 2px 5px -2px rgba(0,0,0,0.05);">
-            <div style="display:flex; align-items:center; gap:6px; margin-bottom:6px;">
-            <div style="width:22px; height:22px; background:linear-gradient(135deg, #4f46e5, #6366f1); color:white; border-radius:50%; display:flex; justify-content:center; align-items:center; font-weight:bold; font-size:10px;">{udisp[0].upper()}</div>
-            <span style="font-weight:700; color:#0f172a; font-size:12px;">{udisp}'s Session</span>
+            <div class="exam-session-summary" style="background:#fff; padding:8px; border:1px solid #e2e8f0; border-radius:10px; margin:6px 0; box-shadow:0 3px 8px -4px rgba(0,0,0,0.08);">
+            <div style="display:flex; align-items:center; gap:7px; margin-bottom:7px;">
+            <div style="width:28px; height:28px; background:linear-gradient(135deg, #4f46e5, #6366f1); color:white; border-radius:50%; display:flex; justify-content:center; align-items:center; font-weight:bold;">{udisp[0].upper()}</div>
+            <span style="font-weight:700; color:#0f172a; font-size:14px;">{udisp}'s Session</span>
             </div>
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:5px 4px; font-size:10px; color:#475569;">
-            <div style="display:flex; align-items:center; gap:4px;"><div style="width:14px; height:14px; background:#16a34a; color:white; border-radius:4px 4px 0 0; display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:8px;">{ans_count}</div><span style="font-weight:600;">Answered</span></div>
-            <div style="display:flex; align-items:center; gap:4px;"><div style="width:14px; height:14px; background:#7c3aed; color:white; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:8px;">{marked_count}</div><span style="font-weight:600;">Marked</span></div>
-            <div style="display:flex; align-items:center; gap:4px;"><div style="width:14px; height:14px; background:#fff; border:1px solid #cbd5e1; color:#334155; border-radius:4px; display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:8px;">{not_visit_count}</div><span style="font-weight:600;">Not Visited</span></div>
-            <div style="display:flex; align-items:center; gap:4px;"><div style="width:14px; height:14px; background:#ef4444; color:white; border-radius:0 0 4px 4px; display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:8px;">{not_ans_count}</div><span style="font-weight:600;">Not Answered</span></div>
-            <div style="display:flex; align-items:center; gap:4px; grid-column:span 2;"><div style="width:14px; height:14px; background:#7c3aed; color:white; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:8px; position:relative;">{ans_marked_count}<div style="position:absolute; bottom:-2px; right:-2px; width:6px; height:6px; background:#16a34a; border-radius:50%; border:1px solid white;"></div></div><span style="font-weight:600;">Marked and Answered</span></div>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:5px 6px; font-size:11px; color:#475569;">
+            <div style="display:flex; align-items:center; gap:5px;"><div style="width:18px; height:18px; background:#16a34a; color:white; border-radius:6px 6px 0 0; display:flex; align-items:center; justify-content:center; font-weight:bold;">{ans_count}</div><span style="font-weight:600;">Answered</span></div>
+            <div style="display:flex; align-items:center; gap:5px;"><div style="width:18px; height:18px; background:#7c3aed; color:white; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:bold;">{marked_count}</div><span style="font-weight:600;">Marked</span></div>
+            <div style="display:flex; align-items:center; gap:5px;"><div style="width:18px; height:18px; background:#fff; border:1px solid #cbd5e1; color:#334155; border-radius:6px; display:flex; align-items:center; justify-content:center; font-weight:bold;">{not_visit_count}</div><span style="font-weight:600;">Not Visited</span></div>
+            <div style="display:flex; align-items:center; gap:5px;"><div style="width:18px; height:18px; background:#ef4444; color:white; border-radius:0 0 6px 6px; display:flex; align-items:center; justify-content:center; font-weight:bold;">{not_ans_count}</div><span style="font-weight:600;">Not Answered</span></div>
+            <div style="display:flex; align-items:center; gap:5px; grid-column:span 2;"><div style="width:18px; height:18px; background:#7c3aed; color:white; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:bold; position:relative;">{ans_marked_count}<div style="position:absolute; bottom:-2px; right:-2px; width:8px; height:8px; background:#16a34a; border-radius:50%; border:1px solid white;"></div></div><span style="font-weight:600;">Marked and Answered</span></div>
             </div></div>"""
             st.markdown(html_legend, unsafe_allow_html=True)
-        st.markdown(f"<div style='background:linear-gradient(90deg, #eff6ff, #dbeafe); padding:10px; font-weight:800; color:#1e40af; font-size:11px; text-transform:uppercase; border-radius:8px; margin-bottom:12px; text-align:center;'>SECTION: {st.session_state.topic}</div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='exam-section-label' style='background:linear-gradient(90deg, #eff6ff, #dbeafe); padding:8px; font-weight:800; color:#1e40af; font-size:11px; text-transform:uppercase; border-radius:8px; margin-bottom:8px; text-align:center;'>SECTION: {st.session_state.topic}</div>", unsafe_allow_html=True)
 
         with st.expander("System Engine", expanded=False):
             st.markdown("<div id='hidden-engine-marker'></div>", unsafe_allow_html=True)
@@ -1523,16 +1558,16 @@ def render_exam():
             
         full_html = f"""<!DOCTYPE html><html><head><style>
         body {{ margin:0; padding:0; font-family:Inter,sans-serif; }}
-        .palette-grid {{ display:grid; grid-template-columns:repeat(6, 1fr); gap:6px; padding:2px; }}
-        .q-btn {{ aspect-ratio:1/1; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; cursor:pointer; border-radius:6px; border:1px solid #cbd5e1; user-select:none; transition:all 0.2s; }}
+        .palette-grid {{ display:grid; grid-template-columns:repeat(5, 1fr); gap:10px; padding:5px; }}
+        .q-btn {{ aspect-ratio:1/1; display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:750; cursor:pointer; border-radius:8px; border:1px solid #cbd5e1; user-select:none; transition:all 0.2s; }}
         .q-btn:hover {{ transform:translateY(-2px); box-shadow:0 4px 8px rgba(0,0,0,0.1); }}
         .notvisited {{ background:#fff; color:#334155; }}
-        .notanswered {{ background:#ef4444; color:#fff; border-color:#ef4444; border-radius:0 0 8px 8px; }}
-        .answered {{ background:#16a34a; color:#fff; border-color:#16a34a; border-radius:8px 8px 0 0; }}
+        .notanswered {{ background:#ef4444; color:#fff; border-color:#ef4444; border-radius:0 0 12px 12px; }}
+        .answered {{ background:#16a34a; color:#fff; border-color:#16a34a; border-radius:12px 12px 0 0; }}
         .marked {{ background:#7c3aed; color:#fff; border-color:#7c3aed; border-radius:50%; }}
         .answeredmarked {{ background:#7c3aed; color:#fff; border-color:#7c3aed; border-radius:50%; position:relative; overflow:visible; }}
-        .answeredmarked::after {{ content:''; position:absolute; bottom:-2px; right:-2px; width:8px; height:8px; background:#16a34a; border-radius:50%; border:1px solid white; }}
-        .current {{ outline:2px solid #2563eb; outline-offset:2px; transform:scale(1.05); z-index:2; }}
+        .answeredmarked::after {{ content:''; position:absolute; bottom:-3px; right:-3px; width:10px; height:10px; background:#16a34a; border-radius:50%; border:2px solid white; }}
+        .current {{ outline:3px solid #2563eb; outline-offset:2px; transform:scale(1.05); z-index:2; }}
         </style></head><body><div class="palette-grid">{grid_html}</div>
         <script>
         function mapAndHide() {{ try {{
@@ -1549,17 +1584,13 @@ def render_exam():
             }});
         }});
         </script></body></html>"""
-        
-        # Calculate dynamic height based on the number of buttons to remove iframe scrollbars
-        grid_rows = math.ceil(total_q / 6)
-        palette_height = max(150, grid_rows * 36 + 10)
-        components.html(full_html, height=palette_height, scrolling=False)
+        components.html(full_html, height=360, scrolling=True)
 
-        st.markdown("<div style='margin-top: 15px;'></div>", unsafe_allow_html=True)
+        st.markdown("<div style='margin-top: 8px;'></div>", unsafe_allow_html=True)
         b1, b2 = st.columns(2)
         b1.button("Question Paper", use_container_width=True)
         b2.button("Instructions", use_container_width=True)
-        st.write("<br>", unsafe_allow_html=True)
+        st.write("<div style='height:0.5rem;'></div>", unsafe_allow_html=True)
         if st.button("🚀 Final Submit", type="primary", use_container_width=True):
             with st.spinner("Submitting responses securely..."):
                 time.sleep(0.5); nav_submit(); st.rerun()
@@ -1567,9 +1598,7 @@ def render_exam():
     with col_main:
         st.markdown(f"<p class='exam-kicker'>Live Assessment &middot; {st.session_state.topic}</p>", unsafe_allow_html=True)
         st.progress((q_idx + 1) / total_q)
-        
-        # Removed hardcoded height from this container to stop unnecessary internal scrolling
-        with st.container(border=False):
+        with st.container(height=460, border=False):
             raw_q = q_data['q']
             clean_q = re.sub(r'^[Qq]?(?:uestion)?\s*\d+[\.\)]\s*', '', raw_q)
             st.markdown(f"""
