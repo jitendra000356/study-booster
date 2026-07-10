@@ -18,31 +18,42 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
+# Feature 4: Restructure Question Bank Management (Basic & Advanced)
 CSV_FOLDER = 'saved_csvs'
+ADVANCED_CSV_FOLDER = 'advanced_csvs'
+
 if not os.path.exists(CSV_FOLDER): 
     os.makedirs(CSV_FOLDER)
+
+if not os.path.exists(ADVANCED_CSV_FOLDER):
+    os.makedirs(ADVANCED_CSV_FOLDER)
 
 # Initialize Session Folder for Persistence
 SESSION_FOLDER = 'active_sessions'
 if not os.path.exists(SESSION_FOLDER):
     os.makedirs(SESSION_FOLDER)
 
-# Initialize Default Folder Structure
+# Initialize Default Folder Structure for both banks
 DEFAULT_STRUCTURE = {
     "Science": ["Physics", "Chemistry", "Biology", "Environment"],
     "Arts": ["History", "Polity", "Geography", "Economics"],
     "Statistics": []
 }
-for root_cat, sub_cats in DEFAULT_STRUCTURE.items():
-    root_path = os.path.join(CSV_FOLDER, root_cat)
-    os.makedirs(root_path, exist_ok=True)
-    for sub_cat in sub_cats:
-        os.makedirs(os.path.join(root_path, sub_cat), exist_ok=True)
+
+for base_folder in [CSV_FOLDER, ADVANCED_CSV_FOLDER]:
+    for root_cat, sub_cats in DEFAULT_STRUCTURE.items():
+        root_path = os.path.join(base_folder, root_cat)
+        os.makedirs(root_path, exist_ok=True)
+        for sub_cat in sub_cats:
+            os.makedirs(os.path.join(root_path, sub_cat), exist_ok=True)
 
 ATTEMPTS_FILE = 'attempts_data.json'
 TIMERS_FILE = 'timers_data.json'
+USERS_FILE = 'users_data.json'
+HISTORY_FILE = 'history_data.json'
+NEG_MARK_FILE = 'negative_marking_data.json'
 
-# Existing Authentication mapping
+# Existing Authentication mapping - Migrated to JSON for Persistence
 ALLOWED_USERS = {
     "Jitendra (Admin)": "Admin@1996", 
     "Jili (Student)": "Jili@1999", 
@@ -57,6 +68,55 @@ ALLOWED_USERS = {
 # ==========================================
 # DATA MANAGEMENT FUNCTIONS
 # ==========================================
+
+def get_all_users():
+    if not os.path.exists(USERS_FILE):
+        with open(USERS_FILE, 'w') as f:
+            json.dump(ALLOWED_USERS, f, indent=4)
+        return ALLOWED_USERS
+    with open(USERS_FILE, 'r') as f:
+        try:
+            return json.load(f)
+        except:
+            return ALLOWED_USERS
+
+def save_users(users):
+    with open(USERS_FILE, 'w') as f:
+        json.dump(users, f, indent=4)
+
+def load_history():
+    if not os.path.exists(HISTORY_FILE):
+        return {}
+    with open(HISTORY_FILE, 'r') as f:
+        try:
+            return json.load(f)
+        except:
+            return {}
+
+def save_history(data):
+    with open(HISTORY_FILE, 'w') as f:
+        json.dump(data, f, indent=4)
+
+def load_neg_mark():
+    if not os.path.exists(NEG_MARK_FILE):
+        return {}
+    with open(NEG_MARK_FILE, 'r') as f:
+        try:
+            return json.load(f)
+        except:
+            return {}
+
+def save_neg_mark(data):
+    with open(NEG_MARK_FILE, 'w') as f:
+        json.dump(data, f, indent=4)
+
+def get_neg_mark(test_key):
+    return load_neg_mark().get(test_key, 0.0)
+
+def set_neg_mark(test_key, value):
+    data = load_neg_mark()
+    data[test_key] = value
+    save_neg_mark(data)
 
 def get_all_csv_files(base_dir=CSV_FOLDER):
     """Recursively fetches all CSV files across folders and subfolders."""
@@ -117,13 +177,95 @@ def set_allowed_attempts(user, test_file, allowed_count):
     data[user][test_file]['allowed'] = allowed_count
     save_attempts_data(data)
 
+def record_detailed_attempt(user, test_key, original_file):
+    """Saves detailed breakdown of user progress for Feature 2"""
+    history = load_history()
+    if user not in history: 
+        history[user] = []
+        
+    correct, incorrect, unanswered, negative, final_score = calculate_detailed_score(test_key)
+    total_q = len(st.session_state.questions)
+    
+    q_details = []
+    for i, q in enumerate(st.session_state.questions):
+        is_match = (q.get('type') == 'match')
+        user_ans = st.session_state.user_answers.get(i)
+        
+        q_num = i + 1
+        raw_q = q['q']
+        clean_q = re.sub(r'^[Qq]?(?:uestion)?\s*\d+[\.\)]\s*', '', raw_q)
+        
+        if user_ans is None or (is_match and not user_ans):
+            status = "Unanswered"
+            marks = 0
+            neg = 0
+            u_ans_str = "None"
+            c_ans_str = str(q['ans']) if is_match else str(q['options'][q['ans']] if 0 <= q['ans'] < len(q['options']) else "N/A")
+        else:
+            if is_match:
+                correct_ans = q['ans']
+                c_ans_str = str(correct_ans)
+                u_ans_str = str(user_ans)
+                if isinstance(user_ans, dict) and user_ans == correct_ans:
+                    status = "Correct"
+                    marks = 1
+                    neg = 0
+                else:
+                    status = "Incorrect"
+                    marks = 0
+                    neg = get_neg_mark(test_key)
+            else:
+                correct_ans = q['options'][q['ans']] if 0 <= q['ans'] < len(q['options']) else None
+                c_ans_str = str(correct_ans)
+                u_ans_str = str(user_ans)
+                if user_ans == correct_ans:
+                    status = "Correct"
+                    marks = 1
+                    neg = 0
+                else:
+                    status = "Incorrect"
+                    marks = 0
+                    neg = get_neg_mark(test_key)
+                    
+        q_details.append({
+            "q_num": q_num,
+            "question": clean_q,
+            "user_ans": u_ans_str,
+            "correct_ans": c_ans_str,
+            "status": status,
+            "marks": marks,
+            "negative": neg
+        })
+        
+    attempt_data = {
+        "test_name": os.path.basename(original_file).replace('.csv', '').replace('_', ' '),
+        "subject": st.session_state.topic,
+        "folder": os.path.dirname(original_file) or 'Root',
+        "attempt_number": get_attempt_data(user, test_key)['used'],
+        "datetime": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "total_questions": total_q,
+        "attempted": total_q - unanswered,
+        "correct": correct,
+        "incorrect": incorrect,
+        "unanswered": unanswered,
+        "marks_obtained": correct,
+        "negative_marks": negative,
+        "final_score": final_score,
+        "percentage": round((final_score / total_q) * 100, 2) if total_q > 0 else 0,
+        "q_details": q_details
+    }
+    history[user].append(attempt_data)
+    save_history(history)
+
 def record_attempt_usage():
     """Securely increments the attempt count once per active test session upon completion."""
     if not st.session_state.get('attempt_recorded', False):
         user = st.session_state.get('current_user')
-        test_file = st.session_state.get('current_test_filename')
-        if user and test_file:
-            increment_attempt(user, test_file)
+        test_key = st.session_state.get('current_test_filename')
+        if user and test_key:
+            original_file = test_key.replace("ADVANCED|", "")
+            increment_attempt(user, test_key)
+            record_detailed_attempt(user, test_key, original_file)
         st.session_state.attempt_recorded = True
 
 # -- Timers Logic --
@@ -165,7 +307,9 @@ def init_session():
         'current_test_filename': "",
         'attempt_recorded': False,
         'admin_current_path': "",
-        'sid': ""
+        'sid': "",
+        'current_bank': "Basic",
+        'last_admin_bank': "Basic"
     }
 
     query_params = st.query_params
@@ -242,7 +386,13 @@ def record_activity():
 def load_quiz(file_name):
     """Parses CSV correctly, supports both MCQ and Match the Following automatically (100% crash-proof)."""
     st.session_state.questions = []
-    file_path = os.path.join(CSV_FOLDER, file_name.replace('/', os.sep))
+    
+    # Restructure Check
+    bank = st.session_state.get('current_bank', 'Basic')
+    base_dir = CSV_FOLDER if bank == 'Basic' else ADVANCED_CSV_FOLDER
+    file_path = os.path.join(base_dir, file_name.replace('/', os.sep))
+    
+    test_key = file_name if bank == 'Basic' else f"ADVANCED|{file_name}"
     
     with open(file_path, 'r', encoding='utf-8-sig', errors='ignore') as f:
         reader = csv.DictReader(f)
@@ -301,7 +451,7 @@ def load_quiz(file_name):
                 })
             
     timers_data = load_timers_data()
-    t_config = timers_data.get(file_name, {"mode": "Total Time", "value": 30})
+    t_config = timers_data.get(test_key, {"mode": "Total Time", "value": 30})
     
     if t_config["mode"] == "No Timer":
         t_mode = "No Timer"
@@ -328,10 +478,11 @@ def load_quiz(file_name):
     st.session_state.remaining_seconds = rem_sec
     st.session_state.is_paused = False
     
-    st.session_state.current_test_filename = file_name
+    st.session_state.current_test_filename = test_key
     st.session_state.attempt_recorded = False
 
 def calculate_score():
+    """Preserved for strict backward compatibility."""
     score = 0
     for i, q in enumerate(st.session_state.questions):
         if q.get('type') == 'match':
@@ -344,6 +495,37 @@ def calculate_score():
             if st.session_state.user_answers.get(i) == correct_ans:
                 score += 1
     return score
+
+def calculate_detailed_score(test_key):
+    """Calculates detailed score metrics including Feature 3: Negative Marking."""
+    score = 0
+    incorrect = 0
+    unanswered = 0
+    neg_mark_value = get_neg_mark(test_key)
+
+    for i, q in enumerate(st.session_state.questions):
+        is_match = (q.get('type') == 'match')
+        user_ans = st.session_state.user_answers.get(i)
+
+        if user_ans is None or (is_match and not user_ans):
+            unanswered += 1
+        else:
+            if is_match:
+                correct_ans = q['ans']
+                if isinstance(user_ans, dict) and user_ans == correct_ans:
+                    score += 1
+                else:
+                    incorrect += 1
+            else:
+                correct_ans = q['options'][q['ans']] if 0 <= q['ans'] < len(q['options']) else None
+                if user_ans == correct_ans:
+                    score += 1
+                else:
+                    incorrect += 1
+
+    negative_marks = incorrect * neg_mark_value
+    final_score = score - negative_marks
+    return score, incorrect, unanswered, negative_marks, final_score
 
 def nav_goto(q_idx):
     record_activity()
@@ -573,6 +755,8 @@ def render_visual_timer():
 # ==========================================
 
 def render_login():
+    users = get_all_users()
+    
     st.write("<br><br><br>", unsafe_allow_html=True)
     col1, col2, col3 = st.columns([1, 1.5, 1]) 
     with col2:
@@ -581,12 +765,12 @@ def render_login():
             st.markdown("<p style='text-align: center; font-size: 1.1rem; color: #64748b !important;'>Sign in to access your dashboard</p>", unsafe_allow_html=True)
             st.divider()
             
-            username = st.selectbox("👤 Select Profile", ["-- Select User --"] + list(ALLOWED_USERS.keys()))
+            username = st.selectbox("👤 Select Profile", ["-- Select User --"] + list(users.keys()))
             pwd = st.text_input("🔑 Enter Passcode", type="password")
             
             st.write("")
             if st.button("Secure Login 🚀", type="primary", use_container_width=True):
-                if username != "-- Select User --" and ALLOWED_USERS.get(username) == pwd:
+                if username != "-- Select User --" and users.get(username) == pwd:
                     st.session_state.auth = True
                     st.session_state.current_user = username
                     st.session_state.active_page = "Dashboard"
@@ -634,11 +818,18 @@ def render_dashboard():
     st.write("---")
     
     if "Admin" in st.session_state.current_user:
+        # Feature 4: Basic and Advanced banks isolated routing
         with st.expander("📁 Admin Panel: Question Bank Management", expanded=False):
-            current_admin_path = st.session_state.get('admin_current_path', '')
-            full_admin_path = os.path.join(CSV_FOLDER, current_admin_path.replace('/', os.sep))
+            admin_bank = st.radio("Select Question Bank", ["Basic", "Advanced"], horizontal=True, key="admin_bank_radio")
+            if st.session_state.get('last_admin_bank') != admin_bank:
+                st.session_state.admin_current_path = ""
+                st.session_state.last_admin_bank = admin_bank
             
-            st.markdown(f"**Current Folder:** `Question Bank / {current_admin_path.replace('/', ' / ')}`")
+            active_admin_base = CSV_FOLDER if admin_bank == "Basic" else ADVANCED_CSV_FOLDER
+            current_admin_path = st.session_state.get('admin_current_path', '')
+            full_admin_path = os.path.join(active_admin_base, current_admin_path.replace('/', os.sep))
+            
+            st.markdown(f"**Current Folder ({admin_bank}):** `Question Bank / {current_admin_path.replace('/', ' / ')}`")
             
             c_up, c_newf, c_upld = st.columns(3)
             with c_up:
@@ -686,9 +877,9 @@ def render_dashboard():
             if not files: st.info("No files in this folder.")
             
             all_folders = []
-            for root, dirs, _ in os.walk(CSV_FOLDER):
+            for root, dirs, _ in os.walk(active_admin_base):
                 for d in dirs:
-                    rel = os.path.relpath(os.path.join(root, d), CSV_FOLDER).replace(os.sep, '/')
+                    rel = os.path.relpath(os.path.join(root, d), active_admin_base).replace(os.sep, '/')
                     all_folders.append(rel)
             all_folders.insert(0, "Root")
             
@@ -702,7 +893,7 @@ def render_dashboard():
                 
                 move_target = c3.selectbox("Move to", ["-- Select --"] + all_folders, key=f"mov_{current_admin_path}_{f_name}", label_visibility="collapsed")
                 if move_target != "-- Select --":
-                    tgt = CSV_FOLDER if move_target == "Root" else os.path.join(CSV_FOLDER, move_target.replace('/', os.sep))
+                    tgt = active_admin_base if move_target == "Root" else os.path.join(active_admin_base, move_target.replace('/', os.sep))
                     os.rename(file_p, os.path.join(tgt, f_name))
                     st.rerun()
                     
@@ -710,12 +901,19 @@ def render_dashboard():
                     os.remove(file_p)
                     st.rerun()
 
+        # Combine options for all Administrative forms to allow unified settings for both Banks
+        all_basic = get_all_csv_files(CSV_FOLDER)
+        all_adv = get_all_csv_files(ADVANCED_CSV_FOLDER)
+        admin_file_options = {}
+        for f in all_basic: admin_file_options[f"Basic | {f}"] = f
+        for f in all_adv: admin_file_options[f"Advanced | {f}"] = f"ADVANCED|{f}"
+
         with st.expander("⏱️ Admin Panel: Timer Management", expanded=False):
             st.markdown("Configure timer rules for each test individually.")
-            all_tests_admin_tmr = get_all_csv_files()
-            
-            if all_tests_admin_tmr:
-                t_file = st.selectbox("Select Test to Configure Timer", all_tests_admin_tmr, key="tmr_test")
+            if admin_file_options:
+                sel_display = st.selectbox("Select Test to Configure Timer", list(admin_file_options.keys()), key="tmr_test")
+                t_file = admin_file_options[sel_display]
+                
                 if t_file:
                     timers_data = load_timers_data()
                     current_settings = timers_data.get(t_file, {"mode": "Total Time", "value": 30})
@@ -737,19 +935,20 @@ def render_dashboard():
                     if st.button("Save Timer Settings", type="primary"):
                         timers_data[t_file] = {"mode": new_mode, "value": new_val}
                         save_timers_data(timers_data)
-                        st.success(f"✅ Timer settings saved for {os.path.basename(t_file)}!")
+                        st.success(f"✅ Timer settings saved for {sel_display}!")
             else:
                 st.info("No tests available to configure.")
 
         with st.expander("⚙️ Admin Panel: Attempt Management", expanded=False):
             st.markdown("Select a user and a test to modify attempt limits.")
             a_col1, a_col2 = st.columns(2)
+            users = get_all_users()
             with a_col1:
-                sel_user = st.selectbox("Select User", list(ALLOWED_USERS.keys()), key="adm_user")
+                sel_user = st.selectbox("Select User", list(users.keys()), key="adm_user")
             with a_col2:
-                all_tests_admin_att = get_all_csv_files()
-                if all_tests_admin_att:
-                    sel_test = st.selectbox("Select Test", all_tests_admin_att, key="adm_test")
+                if admin_file_options:
+                    sel_test_display = st.selectbox("Select Test", list(admin_file_options.keys()), key="adm_test")
+                    sel_test = admin_file_options[sel_test_display]
                 else:
                     sel_test = None
             
@@ -758,29 +957,140 @@ def render_dashboard():
                 new_limit = st.number_input("Allowed Attempts", min_value=1, value=curr_data['allowed'], key="adm_limit")
                 if st.button("Update Limit", type="primary", key="btn_update_limit"):
                     set_allowed_attempts(sel_user, sel_test, new_limit)
-                    st.success(f"✅ Updated! {sel_user.split()[0]} now has {new_limit} allowed attempts for {os.path.basename(sel_test)}.")
-    
+                    st.success(f"✅ Updated! {sel_user.split()[0]} now has {new_limit} allowed attempts for {sel_test_display}.")
+
+        # Feature 3: Negative Marking Configuration
+        with st.expander("⚖️ Admin Panel: Negative Marking Configuration", expanded=False):
+            st.markdown("Set negative marking (Range 0.00 to 0.33) deducted for incorrect answers.")
+            if admin_file_options:
+                sel_display_nm = st.selectbox("Select Test for Negative Marking", list(admin_file_options.keys()), key="nm_sel_test")
+                nm_test_key = admin_file_options[sel_display_nm]
+                
+                curr_val = get_neg_mark(nm_test_key)
+                new_val = st.number_input("Negative Marks per Incorrect Answer", min_value=0.0, max_value=0.33, value=float(curr_val), step=0.01)
+                
+                if st.button("Save Negative Marking", type="primary"):
+                    set_neg_mark(nm_test_key, new_val)
+                    st.success(f"✅ Negative marking updated to {new_val} for {sel_display_nm}!")
+            else:
+                st.info("No tests available to configure.")
+
+        # Feature 1: Complete User Management Panel
+        with st.expander("👥 Admin Panel: User Management", expanded=False):
+            users = get_all_users()
+            um_tabs = st.tabs(["Add User", "Remove User", "Change Password"])
+            
+            with um_tabs[0]:
+                new_u = st.text_input("New Username (Format: Name (Role))")
+                new_p = st.text_input("Password", type="password")
+                if st.button("Add User", type="primary"):
+                    if new_u in users:
+                        st.error("Username already exists!")
+                    elif new_u and new_p:
+                        users[new_u] = new_p
+                        save_users(users)
+                        st.success(f"Added user: {new_u}")
+                        st.rerun()
+                        
+            with um_tabs[1]:
+                del_u = st.selectbox("Select User to Remove", [u for u in users if "Admin" not in u])
+                confirm_del = st.checkbox(f"I confirm I want to permanently delete {del_u}")
+                if st.button("Delete User", type="primary"):
+                    if confirm_del and del_u:
+                        del users[del_u]
+                        save_users(users)
+                        st.success("User deleted!")
+                        st.rerun()
+                    elif not confirm_del:
+                        st.warning("Please confirm deletion.")
+                        
+            with um_tabs[2]:
+                ch_u = st.selectbox("Select User", list(users.keys()), key="ch_u")
+                ch_p = st.text_input("New Password", type="password", key="ch_p")
+                if st.button("Change Password", type="primary"):
+                    if ch_p:
+                        users[ch_u] = ch_p
+                        save_users(users)
+                        st.success("Password updated immediately!")
+
+        # Feature 2: User Progress Report Dashboard
+        with st.expander("📊 Admin Panel: User Progress Report", expanded=False):
+            users = get_all_users()
+            rep_u = st.selectbox("Select User for Report", list(users.keys()))
+            if rep_u:
+                history = load_history().get(rep_u, [])
+                if not history:
+                    st.info(f"No attempt history found for {rep_u}.")
+                else:
+                    total_tests = len(set(h['test_name'] for h in history))
+                    total_attempts = len(history)
+                    scores = [h['final_score'] for h in history]
+                    percentages = [h['percentage'] for h in history]
+                    avg_score = sum(scores) / len(scores) if scores else 0
+                    avg_perc = sum(percentages) / len(percentages) if percentages else 0
+                    high_score = max(scores) if scores else 0
+                    low_score = min(scores) if scores else 0
+                    last_attempt = history[-1]['datetime'] if history else "N/A"
+                    
+                    st.markdown("#### Overall Summary")
+                    c1, c2, c3, c4 = st.columns(4)
+                    c1.metric("Total Tests", total_tests)
+                    c2.metric("Total Attempts", total_attempts)
+                    c3.metric("Highest Score", f"{high_score:.2f}")
+                    c4.metric("Lowest Score", f"{low_score:.2f}")
+                    
+                    c5, c6, c7, c8 = st.columns(4)
+                    c5.metric("Avg Score", f"{avg_score:.2f}")
+                    c6.metric("Avg Percentage", f"{avg_perc:.2f}%")
+                    c7.metric("Last Attempt", last_attempt)
+                    
+                    st.write("---")
+                    st.markdown("#### Attempt History")
+                    for att in reversed(history):
+                        result_status = "Pass" if att['percentage'] >= 33 else "Fail"
+                        with st.expander(f"Attempt {att['attempt_number']} - {att['test_name']} ({att['datetime']}) | Score: {att['final_score']:.2f} | {result_status}"):
+                            st.write(f"**Subject:** {att['subject']} | **Folder:** {att['folder']}")
+                            st.write(f"**Total Qs:** {att['total_questions']} | **Attempted:** {att['attempted']} | **Correct:** {att['correct']} | **Incorrect:** {att['incorrect']} | **Unanswered:** {att['unanswered']}")
+                            st.write(f"**Marks Obtained:** {att['marks_obtained']} | **Negative Marks:** {att['negative_marks']:.2f} | **Final Score:** {att['final_score']:.2f} | **Percentage:** {att['percentage']}%")
+                            
+                            st.markdown("##### Detailed Question Report")
+                            for qd in att['q_details']:
+                                st.markdown(f"**Q{qd['q_num']}. {qd['question']}**")
+                                c_a, c_b, c_c = st.columns(3)
+                                c_a.write(f"**Selected:** {qd['user_ans']}")
+                                c_b.write(f"**Correct:** {qd['correct_ans']}")
+                                status_color = "green" if qd['status'] == "Correct" else "red" if qd['status'] == "Incorrect" else "orange"
+                                c_c.markdown(f"**Status:** <span style='color:{status_color}'>{qd['status']}</span>", unsafe_allow_html=True)
+                                st.write(f"**Marks:** {qd['marks']} | **Negative:** {qd['negative']:.2f}")
+                                st.write("---")
+
     col_space1, col_tests, col_space2 = st.columns([1, 4, 1])
     
     with col_tests:
-        st.markdown("### 📋 Available Test Series")
+        col_tests_head1, col_tests_head2 = st.columns([1, 1])
+        with col_tests_head1:
+            st.markdown("### 📋 Available Test Series")
+        with col_tests_head2:
+            st.session_state.current_bank = st.radio("Question Bank", ["Basic", "Advanced"], horizontal=True, label_visibility="collapsed")
+        
+        active_user_base = CSV_FOLDER if st.session_state.current_bank == "Basic" else ADVANCED_CSV_FOLDER
         
         search_query = st.text_input("🔍 Search Test, Subject, or Folder...", "").strip()
         
-        all_files = get_all_csv_files()
+        all_files = get_all_csv_files(active_user_base)
         files_to_display = []
         
         if search_query:
             files_to_display = [f for f in all_files if search_query.lower() in f.lower()]
         else:
             cat_col1, cat_col2 = st.columns(2)
-            root_folders = sorted([d for d in os.listdir(CSV_FOLDER) if os.path.isdir(os.path.join(CSV_FOLDER, d))])
+            root_folders = sorted([d for d in os.listdir(active_user_base) if os.path.isdir(os.path.join(active_user_base, d))])
             
             with cat_col1:
                 sel_cat = st.selectbox("Category", root_folders) if root_folders else None
             
             if sel_cat:
-                cat_path = os.path.join(CSV_FOLDER, sel_cat)
+                cat_path = os.path.join(active_user_base, sel_cat)
                 sub_folders = sorted([d for d in os.listdir(cat_path) if os.path.isdir(os.path.join(cat_path, d))])
                 with cat_col2:
                     if sub_folders:
@@ -798,7 +1108,9 @@ def render_dashboard():
             with st.container(border=True):
                 for file in files_to_display:
                     user = st.session_state.current_user
-                    attempt_data = get_attempt_data(user, file)
+                    test_key = file if st.session_state.current_bank == "Basic" else f"ADVANCED|{file}"
+                    
+                    attempt_data = get_attempt_data(user, test_key)
                     allowed = attempt_data['allowed']
                     used = attempt_data['used']
                     remaining = allowed - used
@@ -813,10 +1125,10 @@ def render_dashboard():
                     c1.markdown(f"<p style='font-size: 0.85rem; color: #64748b; margin-top: 0;'>Attempts: {used} / {allowed} &nbsp;|&nbsp; Remaining: {remaining}</p>", unsafe_allow_html=True)
                     
                     if remaining > 0:
-                        if c2.button("Load Test", key=f"load_{file}"):
+                        if c2.button("Load Test", key=f"load_{test_key}"):
                             load_quiz(file)
                     else:
-                        c2.button("Limit Reached", key=f"limit_{file}", disabled=True, help="You have reached the maximum number of attempts allowed for this test. Please contact the administrator.")
+                        c2.button("Limit Reached", key=f"limit_{test_key}", disabled=True, help="You have reached the maximum number of attempts allowed for this test. Please contact the administrator.")
                         
     if st.session_state.quiz_ready:
         st.divider()
@@ -843,10 +1155,15 @@ def render_instructions():
                 time_display_str = f"{st.session_state.time_val} Minutes"
 
             st.markdown(f"🔹 **Time Limit:** {time_display_str}")
+            
+            neg_mark_display = get_neg_mark(st.session_state.current_test_filename)
+            if neg_mark_display > 0:
+                st.markdown(f"🔹 **Negative Marking:** -{neg_mark_display} for every incorrect answer.")
+            
             st.markdown("""
             🔹 **Navigation:** You can jump to any question using the Question Palette on the right.
             🔹 **Auto-Pause:** If you become completely inactive for **5 minutes**, the exam will pause itself to save your time safely.
-            🔹 **Marking Scheme:** Every correct answer adds to your score. No negative marking.
+            🔹 **Marking Scheme:** Every correct answer adds to your score.
             🔹 **Submission:** Exam submits automatically when timer hits zero.
             """)
             
@@ -1192,20 +1509,24 @@ def render_exam():
 
 def render_result():
     total_q = len(st.session_state.questions)
-    score = calculate_score()
-    attempted = len(st.session_state.user_answers)
+    test_key = st.session_state.current_test_filename
+    
+    correct, incorrect, unanswered, negative, final_score = calculate_detailed_score(test_key)
+    attempted = total_q - unanswered
     
     st.markdown("<h1 style='color: #4F46E5; text-align: center;'>🏆 Performance Analysis</h1>", unsafe_allow_html=True)
     st.divider()
     
-    c1, c2, c3 = st.columns(3)
+    c1, c2, c3, c4 = st.columns(4)
     with c1:
         st.info(f"### 📝 Attempted\n# {attempted} / {total_q}")
     with c2:
-        st.success(f"### ✅ Score\n# {score} / {total_q}")
+        st.success(f"### ✅ Correct\n# {correct} / {total_q}")
     with c3:
-        accuracy = round((score / attempted * 100) if attempted > 0 else 0, 1)
-        st.warning(f"### 🎯 Accuracy\n# {accuracy}%")
+        st.error(f"### ⛔ Penalty\n# -{negative:.2f}")
+    with c4:
+        accuracy = round((correct / attempted * 100) if attempted > 0 else 0, 1)
+        st.warning(f"### 🎯 Final Score\n# {final_score:.2f}")
         
     st.write("<br><br>", unsafe_allow_html=True)
     st.markdown("### 📋 Detailed Answer Key")
@@ -1290,7 +1611,8 @@ def main():
                 'visited_questions', 'marked_questions', 'quiz_ready', 'topic', 
                 'timer_mode', 'time_val', 'remaining_seconds', 'last_calc_time', 
                 'last_interaction_time', 'active_page', 'is_paused', 
-                'current_test_filename', 'attempt_recorded', 'admin_current_path', 'sid'
+                'current_test_filename', 'attempt_recorded', 'admin_current_path', 'sid',
+                'current_bank', 'last_admin_bank'
             ]
             
             safe_state = {k: st.session_state[k] for k in safe_keys if k in st.session_state}
