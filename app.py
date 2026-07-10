@@ -1,3 +1,14 @@
+Here is the completely updated, production-ready `app.py` code.
+
+I have implemented both **Feature 1 (Admin User Performance Management)** and **Feature 2 (Refine Exam Controls & Timer Panel)** strictly adhering to your constraints. No existing functionalities, workflows, or logic structures were altered.
+
+### Key Adjustments Implemented:
+
+1. **Admin Feedback System**: Introduced a new `feedback_data.json` storage handler securely integrated alongside your other persistence files. Built a new "📊 User Performance Reports" dashboard in the Admin panel to compute holistic user stats and provide a dedicated feedback system.
+2. **User Notification**: Rendered a highly visible, styled component inside the `render_dashboard_performance` view that auto-loads the Admin's latest feedback for that specific student.
+3. **Timer & Controls Refinement**: Leveraged precise column spacing (`[1.4, 1]`) to seamlessly align the Timer and Pause button side-by-side. I reduced the HTML iframe bounds, button min-heights, and font scaling in the palette CSS to create a noticeably sleeker, professional, and compact Exam Control surface.
+
+```python
 import streamlit as st
 import streamlit.components.v1 as components
 import csv
@@ -56,6 +67,7 @@ USERS_FILE = 'users_data.json'
 HISTORY_FILE = 'history_data.json'
 NEG_MARK_FILE = 'negative_marking_data.json'
 QUERIES_FILE = 'queries_data.json'
+FEEDBACK_FILE = 'feedback_data.json' # Feature 1: Added Feedback File
 
 # Existing Authentication mapping
 ALLOWED_USERS = {
@@ -133,6 +145,20 @@ def load_queries():
 
 def save_queries(data):
     with open(QUERIES_FILE, 'w') as f:
+        json.dump(data, f, indent=4)
+
+# Feature 1: Feedback Management
+def load_feedback():
+    if not os.path.exists(FEEDBACK_FILE):
+        return {}
+    with open(FEEDBACK_FILE, 'r') as f:
+        try:
+            return json.load(f)
+        except:
+            return {}
+
+def save_feedback(data):
+    with open(FEEDBACK_FILE, 'w') as f:
         json.dump(data, f, indent=4)
 
 @st.cache_data(ttl=2)
@@ -796,13 +822,13 @@ def inject_custom_css():
         .metric-purple {{ --metric-accent: #8b5cf6; }}
 
         /* Legend box customized for native theme */
-        .legend-box {{ background: var(--secondary-background-color); padding: 10px; border: 1px solid rgba(128, 128, 128, 0.2); border-radius: 8px; margin: 6px 0; box-shadow: 0 2px 5px -2px rgba(0,0,0,0.05); }}
-        .legend-title {{ font-weight: 700; color: var(--text-color); font-size: 12px; }}
+        .legend-box {{ background: var(--secondary-background-color); border: 1px solid rgba(128, 128, 128, 0.2); border-radius: 8px; box-shadow: 0 2px 5px -2px rgba(0,0,0,0.05); }}
+        .legend-title {{ font-weight: 700; color: var(--text-color); }}
         .legend-text {{ font-weight: 600; color: var(--text-color); opacity: 0.9; }}
 
-        /* Compact live-assessment controls */
-        .palette-title {{ margin: 0 0 0.5rem !important; color: var(--text-color) !important; font-size: 0.9rem; font-weight: 800; text-transform: uppercase; }}
-        div[data-testid="stVerticalBlockBorderWrapper"]:has(.palette-title) div.stButton > button {{ min-height: 2.4rem; font-size: 0.9rem; }}
+        /* Feature 2: Compact live-assessment controls */
+        .palette-title {{ margin: 0 0 0.2rem !important; color: var(--text-color) !important; font-size: 0.85rem; font-weight: 800; text-transform: uppercase; }}
+        div[data-testid="stVerticalBlockBorderWrapper"]:has(.palette-title) div.stButton > button {{ min-height: 2.2rem; font-size: 0.85rem; padding: 0.25rem 0.5rem; }}
         
         /* Pre-exam motivational banner */
         .exam-motivation-banner {{
@@ -834,6 +860,7 @@ def inject_custom_css():
         </style>
     """, unsafe_allow_html=True)
 
+# Feature 2: Compact visual timer adjustment
 def render_visual_timer():
     is_timed = (st.session_state.timer_mode == "Total Time (Minutes)")
     rem_sec = int(max(0, st.session_state.remaining_seconds))
@@ -845,14 +872,14 @@ def render_visual_timer():
         <style>
             body {{ margin:0; padding:0; font-family: Inter, sans-serif; background: transparent; }}
             .timer-box {{
-                box-sizing: border-box; min-height: 38px; padding: 5px 8px;
-                border: 1px solid #fecaca; border-radius: 8px;
+                box-sizing: border-box; min-height: 34px; padding: 4px 6px;
+                border: 1px solid #fecaca; border-radius: 6px;
                 background: linear-gradient(135deg, #fff5f5, #fff1f2);
-                color: #e11d48; font-size: 16px; font-weight: 800; text-align: center;
-                display: flex; align-items: center; justify-content: center; gap: 8px;
-                box-shadow: 0 2px 5px rgba(225, 29, 72, 0.05);
+                color: #e11d48; font-size: 14px; font-weight: 800; text-align: center;
+                display: flex; align-items: center; justify-content: center; gap: 4px;
+                box-shadow: 0 1px 3px rgba(225, 29, 72, 0.05);
             }}
-            .no-timer {{ background: #f0f9ff; border-color: #bae6fd; color: #0284c7; font-size: 14px; }}
+            .no-timer {{ background: #f0f9ff; border-color: #bae6fd; color: #0284c7; font-size: 12px; }}
             @media (prefers-color-scheme: dark) {{
                 .timer-box {{ background: linear-gradient(135deg, #4c1d95, #312e81); border-color: #4338ca; color: #f8fafc; }}
                 .no-timer {{ background: #0f172a; border-color: #1e293b; color: #38bdf8; }}
@@ -868,7 +895,7 @@ def render_visual_timer():
             var rem = {rem_sec};
             var display = document.getElementById("time");
             
-            if (!is_timed) {{ display.innerHTML = "Practice Mode - No Limit"; }} 
+            if (!is_timed) {{ display.innerHTML = "Practice Mode"; }} 
             else {{
                 function updateDisplay() {{
                     if (rem <= 0) {{ display.innerHTML = "TIME UP!"; return false; }}
@@ -883,7 +910,7 @@ def render_visual_timer():
     </body>
     </html>
     """
-    components.html(html_code, height=45)
+    components.html(html_code, height=38)
 
 # ==========================================
 # 6. PAGE RENDERING FUNCTIONS
@@ -1030,6 +1057,90 @@ def render_admin():
     st.markdown("<h2 style='font-weight:800;'>⚙️ Admin Control Panel</h2>", unsafe_allow_html=True)
     st.write("---")
     
+    # Feature 1: Admin User Performance Reports & Feedback Management
+    with st.expander("📊 User Performance Reports", expanded=False):
+        history = load_history()
+        users = get_all_users()
+        student_users = [u for u in users if "Admin" not in u]
+        
+        summary_data = []
+        for u in student_users:
+            u_hist = history.get(u, [])
+            if not u_hist:
+                continue
+            
+            total_tests = len(u_hist)
+            scores = [h['final_score'] for h in u_hist]
+            accs = [round((h['correct']/h['attempted']*100),1) if h['attempted']>0 else 0 for h in u_hist]
+            avg_acc = sum(accs)/total_tests if total_tests > 0 else 0
+            
+            if avg_acc >= 80: status = "🟢 Excellent"
+            elif avg_acc >= 60: status = "🔵 Good"
+            elif avg_acc >= 40: status = "🟡 Average"
+            else: status = "🔴 Needs Improvement"
+            
+            summary_data.append({
+                "User": u,
+                "Total Tests": total_tests,
+                "Highest Score": round(max(scores), 2),
+                "Avg Score": round(sum(scores)/total_tests, 2),
+                "Avg Accuracy (%)": round(avg_acc, 1),
+                "Status": status,
+                "Last Test Date": u_hist[-1]['datetime'].split(" ")[0]
+            })
+            
+        if summary_data:
+            st.dataframe(summary_data, use_container_width=True, hide_index=True)
+            st.write("---")
+            
+            sel_u = st.selectbox("Select User for Detailed Report & Feedback", [d["User"] for d in summary_data])
+            if sel_u:
+                u_hist = history.get(sel_u, [])
+                scores = [h['final_score'] for h in u_hist]
+                accs = [round((h['correct']/h['attempted']*100),1) if h['attempted']>0 else 0 for h in u_hist]
+                
+                total_q_overall = sum(h['total_questions'] for h in u_hist)
+                total_corr = sum(h['correct'] for h in u_hist)
+                total_inc = sum(h['incorrect'] for h in u_hist)
+                total_unans = sum(h['unanswered'] for h in u_hist)
+                
+                st.markdown(f"#### 📈 {sel_u}'s Detailed Performance")
+                
+                # Top metrics row
+                c1, c2, c3, c4 = st.columns(4)
+                c1.metric("Total Tests", len(u_hist))
+                c2.metric("Highest Score", round(max(scores), 2))
+                c3.metric("Avg Score", round(sum(scores)/len(scores), 2))
+                c4.metric("Global Accuracy", f"{(total_corr/total_q_overall*100) if total_q_overall>0 else 0:.1f}%")
+                
+                # Bottom detailed tracking row (Feature 1 specs)
+                c5, c6, c7, c8 = st.columns(4)
+                c5.metric("Total Questions", total_q_overall)
+                c6.metric("Total Correct", total_corr)
+                c7.metric("Total Incorrect", total_inc)
+                c8.metric("Unattempted", total_unans)
+                
+                # Visual charts
+                tc1, tc2 = st.columns(2)
+                with tc1:
+                    st.markdown("**Score Trend**")
+                    st.line_chart(scores, height=150)
+                with tc2:
+                    st.markdown("**Accuracy Trend (%)**")
+                    st.line_chart(accs, height=150)
+                
+                # Admin Comment system
+                st.markdown("#### 💬 Admin Feedback & Suggestions")
+                fb_data = load_feedback()
+                current_fb = fb_data.get(sel_u, "")
+                new_fb = st.text_area("Write personalized feedback for this user:", value=current_fb, height=120)
+                if st.button("Save Feedback", type="primary", key=f"save_fb_{sel_u}"):
+                    fb_data[sel_u] = new_fb
+                    save_feedback(fb_data)
+                    st.toast("Feedback saved securely!", icon="✅")
+        else:
+            st.info("No user performance data available yet.")
+
     with st.expander("📁 Question Bank Management", expanded=False):
         admin_bank = st.radio("Select Question Bank", ["Basic", "Advanced"], horizontal=True, key="admin_bank_radio")
         if st.session_state.get('last_admin_bank') != admin_bank:
@@ -1207,6 +1318,18 @@ def render_dashboard_practice():
 def render_dashboard_performance():
     st.markdown("<h2 style='font-weight:800;'>📈 Performance Analytics</h2>", unsafe_allow_html=True)
     st.write("---")
+    
+    # Feature 1: Present saved feedback to user visually
+    fb_data = load_feedback()
+    user_fb = fb_data.get(st.session_state.current_user, "")
+    if user_fb:
+        st.markdown(f"""
+        <div style='background-color: var(--secondary-background-color); border-left: 5px solid {UI_COLORS["primary"]}; padding: 16px; border-radius: 8px; margin-bottom: 24px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);'>
+            <h4 style='margin: 0 0 8px 0; color: var(--text-color); font-size: 1.05rem;'>💬 Admin Suggestion</h4>
+            <p style='margin: 0; color: var(--text-color); opacity: 0.9; font-size: 0.95rem; white-space: pre-wrap;'>{user_fb}</p>
+        </div>
+        """, unsafe_allow_html=True)
+
     history = load_history().get(st.session_state.current_user, [])
     
     if not history:
@@ -1379,28 +1502,34 @@ def render_exam():
             
     with col_pal:
         with st.container(border=True):
-            st.markdown("<p class='palette-title'>Exam Controls & Timer</p>", unsafe_allow_html=True)
-            render_visual_timer()
-            st.write("<div style='margin-top:6px;'></div>", unsafe_allow_html=True)
-            st.button("⏸ Pause Exam", type="secondary", on_click=pause_exam, use_container_width=True)
+            # Feature 2: Compact & Aligned Exam Controls
+            st.markdown("<p class='palette-title' style='margin-bottom:0.25rem !important; font-size: 0.85rem;'>Controls & Timer</p>", unsafe_allow_html=True)
+            
+            c_tmr, c_ps = st.columns([1.4, 1])
+            with c_tmr:
+                render_visual_timer()
+            with c_ps:
+                st.button("⏸ Pause", type="secondary", on_click=pause_exam, use_container_width=True)
             
             udisp = st.session_state.current_user.split()[0]
+            # Feature 2: Reduced font size & tighter padding
             html_legend = f"""
-            <div class="legend-box">
-                <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px;">
-                    <div style="width:24px; height:24px; background:linear-gradient(135deg, #4f46e5, #6366f1); color:white; border-radius:50%; display:flex; justify-content:center; align-items:center; font-weight:bold; font-size:11px;">{udisp[0].upper()}</div>
-                    <span class="legend-title">{udisp}'s Session</span>
+            <div class="legend-box" style="padding: 8px; margin: 4px 0;">
+                <div style="display:flex; align-items:center; gap:6px; margin-bottom:8px;">
+                    <div style="width:20px; height:20px; background:linear-gradient(135deg, #4f46e5, #6366f1); color:white; border-radius:50%; display:flex; justify-content:center; align-items:center; font-weight:bold; font-size:10px;">{udisp[0].upper()}</div>
+                    <span class="legend-title" style="font-size:11px;">{udisp}'s Session</span>
                 </div>
-                <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px 4px; font-size:10px;">
-                    <div style="display:flex; align-items:center; gap:4px;"><div style="width:14px; height:14px; background:#16a34a; border: 1px solid #16a34a; border-radius:4px; display:flex; align-items:center; justify-content:center;"></div><span class="legend-text">Answered</span></div>
-                    <div style="display:flex; align-items:center; gap:4px;"><div style="width:14px; height:14px; background:#7c3aed; border: 1px solid #7c3aed; border-radius:4px; display:flex; align-items:center; justify-content:center;"></div><span class="legend-text">Marked</span></div>
-                    <div style="display:flex; align-items:center; gap:4px;"><div style="width:14px; height:14px; background:transparent; border:1px solid #cbd5e1; border-radius:4px; display:flex; align-items:center; justify-content:center;"></div><span class="legend-text">Not Visited</span></div>
-                    <div style="display:flex; align-items:center; gap:4px;"><div style="width:14px; height:14px; background:#ef4444; border: 1px solid #ef4444; border-radius:4px; display:flex; align-items:center; justify-content:center;"></div><span class="legend-text">Not Answered</span></div>
-                    <div style="display:flex; align-items:center; gap:4px; grid-column:span 2;"><div style="width:14px; height:14px; background:#7c3aed; border: 1px solid #7c3aed; border-radius:4px; position:relative;"><div style="position:absolute; bottom:-3px; right:-3px; width:7px; height:7px; background:#16a34a; border-radius:50%; border:1px solid white;"></div></div><span class="legend-text" style="margin-left: 2px;">Marked and Answered</span></div>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px 4px; font-size:10px;">
+                    <div style="display:flex; align-items:center; gap:4px;"><div style="width:12px; height:12px; background:#16a34a; border: 1px solid #16a34a; border-radius:3px; display:flex; align-items:center; justify-content:center;"></div><span class="legend-text">Answered</span></div>
+                    <div style="display:flex; align-items:center; gap:4px;"><div style="width:12px; height:12px; background:#7c3aed; border: 1px solid #7c3aed; border-radius:3px; display:flex; align-items:center; justify-content:center;"></div><span class="legend-text">Marked</span></div>
+                    <div style="display:flex; align-items:center; gap:4px;"><div style="width:12px; height:12px; background:transparent; border:1px solid #cbd5e1; border-radius:3px; display:flex; align-items:center; justify-content:center;"></div><span class="legend-text">Not Visited</span></div>
+                    <div style="display:flex; align-items:center; gap:4px;"><div style="width:12px; height:12px; background:#ef4444; border: 1px solid #ef4444; border-radius:3px; display:flex; align-items:center; justify-content:center;"></div><span class="legend-text">Not Ans</span></div>
+                    <div style="display:flex; align-items:center; gap:4px; grid-column:span 2;"><div style="width:12px; height:12px; background:#7c3aed; border: 1px solid #7c3aed; border-radius:3px; position:relative;"><div style="position:absolute; bottom:-3px; right:-3px; width:6px; height:6px; background:#16a34a; border-radius:50%; border:1px solid white;"></div></div><span class="legend-text" style="margin-left: 2px;">Marked and Answered</span></div>
                 </div>
             </div>"""
             st.markdown(html_legend, unsafe_allow_html=True)
-        st.markdown(f"<div style='background:linear-gradient(90deg, #eff6ff, #dbeafe); padding:10px; font-weight:800; color:#1e40af; font-size:11px; text-transform:uppercase; border-radius:8px; margin-bottom:12px; text-align:center;'>SECTION: {st.session_state.topic}</div>", unsafe_allow_html=True)
+            
+        st.markdown(f"<div style='background:linear-gradient(90deg, #eff6ff, #dbeafe); padding:8px; font-weight:800; color:#1e40af; font-size:10px; text-transform:uppercase; border-radius:8px; margin-bottom:10px; text-align:center;'>SECTION: {st.session_state.topic}</div>", unsafe_allow_html=True)
 
         with st.expander("System Engine", expanded=False):
             st.markdown("<div id='hidden-engine-marker'></div>", unsafe_allow_html=True)
