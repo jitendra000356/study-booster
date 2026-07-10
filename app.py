@@ -7,6 +7,7 @@ import base64
 import re
 import json
 import pickle
+import uuid
 
 # ==========================================
 # 1. CONFIGURATION & CONSTANTS
@@ -53,6 +54,7 @@ TIMERS_FILE = 'timers_data.json'
 USERS_FILE = 'users_data.json'
 HISTORY_FILE = 'history_data.json'
 NEG_MARK_FILE = 'negative_marking_data.json'
+QUERIES_FILE = 'queries_data.json'  # Added for Ask Query Feature
 
 # Existing Authentication mapping - Migrated to JSON for Persistence
 ALLOWED_USERS = {
@@ -119,6 +121,20 @@ def set_neg_mark(test_key, value):
     data[test_key] = value
     save_neg_mark(data)
 
+def load_queries():
+    if not os.path.exists(QUERIES_FILE):
+        return []
+    with open(QUERIES_FILE, 'r') as f:
+        try:
+            return json.load(f)
+        except:
+            return []
+
+def save_queries(data):
+    with open(QUERIES_FILE, 'w') as f:
+        json.dump(data, f, indent=4)
+
+@st.cache_data(ttl=2)
 def get_all_csv_files(base_dir=CSV_FOLDER):
     """Recursively fetches all CSV files across folders and subfolders."""
     csv_files = []
@@ -310,7 +326,8 @@ def init_session():
         'admin_current_path': "",
         'sid': "",
         'current_bank': "Basic",
-        'last_admin_bank': "Basic"
+        'last_admin_bank': "Basic",
+        'query_input': ""
     }
 
     query_params = st.query_params
@@ -386,101 +403,102 @@ def record_activity():
 # ==========================================
 def load_quiz(file_name):
     """Parses CSV correctly, supports both MCQ and Match the Following automatically (100% crash-proof)."""
-    st.session_state.questions = []
-    
-    # Restructure Check
-    bank = st.session_state.get('current_bank', 'Basic')
-    base_dir = CSV_FOLDER if bank == 'Basic' else ADVANCED_CSV_FOLDER
-    file_path = os.path.join(base_dir, file_name.replace('/', os.sep))
-    
-    test_key = file_name if bank == 'Basic' else f"ADVANCED|{file_name}"
-    
-    with open(file_path, 'r', encoding='utf-8-sig', errors='ignore') as f:
-        reader = csv.DictReader(f)
-        for row in reader:
-            raw_type = row.get('Type')
-            q_type = str(raw_type).strip().lower() if raw_type else ''
-            
-            # Feature: Match the Following Parser
-            if q_type == 'match':
-                left_items = []
-                right_items = []
-                for i in range(1, 11): # Dynamic Support for 2 to 10 pairs
-                    l_val = row.get(f'Left{i}')
-                    r_val = row.get(f'Right{i}')
-                    
-                    l_str = str(l_val).strip() if l_val else ''
-                    r_str = str(r_val).strip() if r_val else ''
-                    
-                    if l_str and r_str:
-                        left_items.append(l_str)
-                        right_items.append(r_str)
+    with st.spinner(f"Loading {os.path.basename(file_name)} environment..."):
+        st.session_state.questions = []
+        
+        # Restructure Check
+        bank = st.session_state.get('current_bank', 'Basic')
+        base_dir = CSV_FOLDER if bank == 'Basic' else ADVANCED_CSV_FOLDER
+        file_path = os.path.join(base_dir, file_name.replace('/', os.sep))
+        
+        test_key = file_name if bank == 'Basic' else f"ADVANCED|{file_name}"
+        
+        with open(file_path, 'r', encoding='utf-8-sig', errors='ignore') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                raw_type = row.get('Type')
+                q_type = str(raw_type).strip().lower() if raw_type else ''
                 
-                if left_items:
+                # Feature: Match the Following Parser
+                if q_type == 'match':
+                    left_items = []
+                    right_items = []
+                    for i in range(1, 11): # Dynamic Support for 2 to 10 pairs
+                        l_val = row.get(f'Left{i}')
+                        r_val = row.get(f'Right{i}')
+                        
+                        l_str = str(l_val).strip() if l_val else ''
+                        r_str = str(r_val).strip() if r_val else ''
+                        
+                        if l_str and r_str:
+                            left_items.append(l_str)
+                            right_items.append(r_str)
+                    
+                    if left_items:
+                        q_text = row.get('Question')
+                        q_text_str = str(q_text).strip() if q_text else ''
+                        st.session_state.questions.append({
+                            'type': 'match',
+                            'q': q_text_str,
+                            'left': left_items,
+                            'right': right_items,
+                            'options': sorted(right_items), # Shuffle right items for dropdowns
+                            'ans': {l: r for l, r in zip(left_items, right_items)} # Correct pairings dict
+                        })
+                
+                # Existing Feature: Standard MCQ Parser
+                else:
+                    opts = []
+                    for i in range(1, 6):
+                        col_name = f'Option{i}'
+                        val = row.get(col_name)
+                        # Safe checking for None to avoid AttributeError
+                        if val and str(val).strip():
+                            opts.append(str(val).strip())
+                    
                     q_text = row.get('Question')
                     q_text_str = str(q_text).strip() if q_text else ''
+                    
+                    ans_val = row.get('Answer')
+                    ans_str = str(ans_val).strip() if ans_val else ''
+                    
                     st.session_state.questions.append({
-                        'type': 'match',
-                        'q': q_text_str,
-                        'left': left_items,
-                        'right': right_items,
-                        'options': sorted(right_items), # Shuffle right items for dropdowns
-                        'ans': {l: r for l, r in zip(left_items, right_items)} # Correct pairings dict
+                        'type': 'mcq',
+                        'q': q_text_str, 
+                        'options': opts, 
+                        'ans': int(ans_str) - 1 if ans_str.isdigit() else -1
                     })
-            
-            # Existing Feature: Standard MCQ Parser
-            else:
-                opts = []
-                for i in range(1, 6):
-                    col_name = f'Option{i}'
-                    val = row.get(col_name)
-                    # Safe checking for None to avoid AttributeError
-                    if val and str(val).strip():
-                        opts.append(str(val).strip())
                 
-                q_text = row.get('Question')
-                q_text_str = str(q_text).strip() if q_text else ''
+        timers_data = load_timers_data()
+        t_config = timers_data.get(test_key, {"mode": "Total Time", "value": 30})
+        
+        if t_config["mode"] == "No Timer":
+            t_mode = "No Timer"
+            t_val = 0
+            rem_sec = 0
+        elif t_config["mode"] == "Per Question":
+            t_mode = "Total Time (Minutes)" 
+            total_seconds = len(st.session_state.questions) * t_config["value"]
+            t_val = round(total_seconds / 60, 2)
+            rem_sec = total_seconds
+        else: 
+            t_mode = "Total Time (Minutes)"
+            t_val = t_config["value"]
+            rem_sec = t_val * 60
                 
-                ans_val = row.get('Answer')
-                ans_str = str(ans_val).strip() if ans_val else ''
-                
-                st.session_state.questions.append({
-                    'type': 'mcq',
-                    'q': q_text_str, 
-                    'options': opts, 
-                    'ans': int(ans_str) - 1 if ans_str.isdigit() else -1
-                })
-            
-    timers_data = load_timers_data()
-    t_config = timers_data.get(test_key, {"mode": "Total Time", "value": 30})
-    
-    if t_config["mode"] == "No Timer":
-        t_mode = "No Timer"
-        t_val = 0
-        rem_sec = 0
-    elif t_config["mode"] == "Per Question":
-        t_mode = "Total Time (Minutes)" 
-        total_seconds = len(st.session_state.questions) * t_config["value"]
-        t_val = round(total_seconds / 60, 2)
-        rem_sec = total_seconds
-    else: 
-        t_mode = "Total Time (Minutes)"
-        t_val = t_config["value"]
-        rem_sec = t_val * 60
-            
-    st.session_state.topic = os.path.basename(file_name).replace('.csv', '').replace("_", " ")
-    st.session_state.quiz_ready = True
-    st.session_state.current_q = 0
-    st.session_state.user_answers = {}
-    st.session_state.visited_questions = {0}
-    st.session_state.marked_questions = set() 
-    st.session_state.timer_mode = t_mode
-    st.session_state.time_val = t_val
-    st.session_state.remaining_seconds = rem_sec
-    st.session_state.is_paused = False
-    
-    st.session_state.current_test_filename = test_key
-    st.session_state.attempt_recorded = False
+        st.session_state.topic = os.path.basename(file_name).replace('.csv', '').replace("_", " ")
+        st.session_state.quiz_ready = True
+        st.session_state.current_q = 0
+        st.session_state.user_answers = {}
+        st.session_state.visited_questions = {0}
+        st.session_state.marked_questions = set() 
+        st.session_state.timer_mode = t_mode
+        st.session_state.time_val = t_val
+        st.session_state.remaining_seconds = rem_sec
+        st.session_state.is_paused = False
+        
+        st.session_state.current_test_filename = test_key
+        st.session_state.attempt_recorded = False
 
 def calculate_score():
     """Preserved for strict backward compatibility."""
@@ -607,16 +625,15 @@ def on_match_change(q_idx, left_items):
 UI_COLORS = {
     "primary": "#2563eb",
     "primary_dark": "#1d4ed8",
-    "ink": "#172033",
+    "ink": "#1e293b",
     "muted": "#64748b",
     "surface": "#ffffff",
     "surface_subtle": "#f8fafc",
     "border": "#e2e8f0",
-    "success": "#15803d",
-    "warning": "#b45309",
+    "success": "#16a34a",
+    "warning": "#d97706",
     "danger": "#dc2626",
 }
-
 
 def render_page_header(title, subtitle=None, eyebrow=None):
     """Render a consistent, presentation-only page header."""
@@ -633,7 +650,6 @@ def render_page_header(title, subtitle=None, eyebrow=None):
         unsafe_allow_html=True,
     )
 
-
 def render_metric_card(label, value, accent="blue", helper_text=None):
     """Render a reusable result or reporting metric without changing its value."""
     helper_html = f"<p>{helper_text}</p>" if helper_text else ""
@@ -648,7 +664,6 @@ def render_metric_card(label, value, accent="blue", helper_text=None):
         unsafe_allow_html=True,
     )
 
-
 def inject_custom_css():
     try:
         with open('bg.jpg', "rb") as image_file:
@@ -662,7 +677,7 @@ def inject_custom_css():
             }}
             """
     except Exception:
-        bg_css = ".stApp { background-color: #f8fafc; }"
+        bg_css = ".stApp { background-color: #f1f5f9; }"
 
     st.markdown(f"""
         <style>
@@ -681,24 +696,24 @@ def inject_custom_css():
             --sb-danger: {UI_COLORS['danger']};
         }}
 
-        html {{ font-size: 16px; }}
+        html {{ font-size: 16px; font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; }}
         .stApp {{
             color: var(--sb-ink);
-            background-color: #e2e8f0;
+            background-color: #f1f5f9;
             color-scheme: light;
         }}
         header[data-testid="stHeader"] {{ background: transparent !important; }}
         .block-container {{
-            max-width: 1440px !important;
-            padding: clamp(1rem, 2vw, 2rem) !important;
-            margin: .85rem auto !important;
-            min-height: calc(100vh - 3rem);
-            border: 1px solid rgba(203, 213, 225, .9);
-            border-radius: 20px;
-            background: rgba(248, 250, 252, .98) !important;
-            box-shadow: 0 18px 45px rgba(15, 23, 42, .16);
+            max-width: 1380px !important;
+            padding: clamp(1rem, 2vw, 2.5rem) !important;
+            margin: 1.5rem auto !important;
+            min-height: calc(100vh - 4rem);
+            border: 1px solid rgba(226, 232, 240, 0.95);
+            border-radius: 24px;
+            background: rgba(255, 255, 255, 0.98) !important;
+            box-shadow: 0 20px 50px -12px rgba(15, 23, 42, 0.1);
         }}
-        section[data-testid="stMain"] {{ color: var(--sb-ink) !important; }}
+        
         section[data-testid="stMain"] p,
         section[data-testid="stMain"] h1,
         section[data-testid="stMain"] h2,
@@ -714,161 +729,171 @@ def inject_custom_css():
 
         /* Shared page structure */
         .page-header {{
-            margin: 0 0 1.5rem;
-            padding: 1.5rem 1.75rem;
-            border: 1px solid rgba(226, 232, 240, .9);
-            border-radius: 18px;
-            background: linear-gradient(120deg, #ffffff 0%, #f8fbff 100%);
-            box-shadow: 0 10px 28px rgba(15, 23, 42, .06);
+            margin: 0 0 2rem;
+            padding: 1.75rem 2rem;
+            border: 1px solid rgba(226, 232, 240, 0.8);
+            border-radius: 16px;
+            background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
         }}
         .page-header h1 {{
             margin: 0 !important;
             color: var(--sb-ink) !important;
-            font-size: clamp(1.65rem, 3vw, 2.35rem) !important;
-            letter-spacing: -.035em;
-            line-height: 1.15;
+            font-size: clamp(1.75rem, 3.5vw, 2.5rem) !important;
+            letter-spacing: -0.025em;
+            line-height: 1.2;
+            font-weight: 800;
         }}
         .page-eyebrow {{
-            margin: 0 0 .35rem !important;
+            margin: 0 0 0.5rem !important;
             color: var(--sb-primary) !important;
-            font-size: .74rem;
-            font-weight: 800;
-            letter-spacing: .1em;
+            font-size: 0.85rem;
+            font-weight: 700;
+            letter-spacing: 0.1em;
             text-transform: uppercase;
         }}
         .page-subtitle {{
-            margin: .55rem 0 0 !important;
+            margin: 0.5rem 0 0 !important;
             color: var(--sb-muted) !important;
-            font-size: 1rem;
-            line-height: 1.55;
+            font-size: 1.05rem;
+            line-height: 1.5;
         }}
+        
+        /* Dashboard & Exam Cards */
+        .test-card-title {{ margin: 0; font-size: 1.15rem; font-weight: 700; color: #1e293b; line-height: 1.3; }}
+        .test-card-folder {{ font-size: 0.85rem; color: #64748b; font-weight: 500; margin: 4px 0 8px 0; display:flex; align-items:center; gap: 4px; }}
+        .test-card-stats {{ font-size: 0.85rem; color: #475569; background: #f1f5f9; padding: 4px 10px; border-radius: 6px; display: inline-block; font-weight: 600; border: 1px solid #e2e8f0; }}
+        
         .metric-card {{
-            min-height: 120px;
-            padding: 1.05rem 1.1rem;
+            min-height: 130px;
+            padding: 1.25rem 1.5rem;
             border: 1px solid var(--sb-border);
             border-top: 4px solid var(--metric-accent, var(--sb-primary));
-            border-radius: 14px;
+            border-radius: 16px;
             background: var(--sb-surface);
-            box-shadow: 0 4px 15px rgba(15, 23, 42, .05);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
         }}
+        .metric-card:hover {{ transform: translateY(-3px); box-shadow: 0 15px 25px -5px rgba(0, 0, 0, 0.08); }}
         .metric-card span {{
             display: block;
             color: var(--sb-muted) !important;
-            font-size: .78rem;
-            font-weight: 750;
-            letter-spacing: .04em;
+            font-size: 0.85rem;
+            font-weight: 700;
+            letter-spacing: 0.05em;
             text-transform: uppercase;
         }}
         .metric-card strong {{
             display: block;
-            margin-top: .35rem;
+            margin-top: 0.5rem;
             color: var(--sb-ink);
-            font-size: clamp(1.35rem, 2.3vw, 1.9rem);
+            font-size: clamp(1.5rem, 2.5vw, 2.2rem);
             line-height: 1.1;
+            font-weight: 800;
         }}
-        .metric-card p {{ margin: .4rem 0 0 !important; color: var(--sb-muted) !important; font-size: .82rem; }}
-        .metric-blue {{ --metric-accent: #2563eb; }}
-        .metric-green {{ --metric-accent: #16a34a; }}
-        .metric-red {{ --metric-accent: #dc2626; }}
-        .metric-amber {{ --metric-accent: #d97706; }}
-        .metric-purple {{ --metric-accent: #7c3aed; }}
-        .exam-kicker {{ margin: 0 0 .45rem; color: var(--sb-primary) !important; font-size: .78rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }}
-        .exam-title {{ margin: 0 0 .8rem; color: var(--sb-ink) !important; font-size: clamp(1.3rem, 2.4vw, 1.8rem); font-weight: 800; letter-spacing: -.025em; }}
-        .question-card {{ margin: .75rem 0 1.15rem; padding: 1.4rem; border: 1px solid #dbe3ef; border-radius: 15px; background: #ffffff; box-shadow: 0 8px 24px rgba(15, 23, 42, .055); }}
-        .question-card__number {{ display: inline-flex; align-items: center; min-height: 26px; padding: 0 .6rem; border-radius: 99px; background: #eff6ff; color: #1d4ed8 !important; font-size: .75rem; font-weight: 800; letter-spacing: .03em; }}
-        .question-card__text {{ margin: .7rem 0 0 !important; color: var(--sb-ink) !important; font-size: clamp(1.05rem, 1.7vw, 1.22rem); font-weight: 650; line-height: 1.65; }}
-        .palette-title {{ margin: .8rem 0 .35rem; color: var(--sb-ink) !important; font-size: .85rem; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; }}
-
+        .metric-card p {{ margin: 0.5rem 0 0 !important; color: var(--sb-muted) !important; font-size: 0.85rem; }}
+        .metric-blue {{ --metric-accent: #3b82f6; }}
+        .metric-green {{ --metric-accent: #10b981; }}
+        .metric-red {{ --metric-accent: #ef4444; }}
+        .metric-amber {{ --metric-accent: #f59e0b; }}
+        .metric-purple {{ --metric-accent: #8b5cf6; }}
+        
+        .exam-kicker {{ margin: 0 0 0.5rem; color: var(--sb-primary) !important; font-size: 0.85rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }}
+        .exam-title {{ margin: 0 0 1rem; color: var(--sb-ink) !important; font-size: clamp(1.5rem, 2.5vw, 2rem); font-weight: 800; letter-spacing: -0.025em; }}
+        
+        .question-card {{ margin: 1rem 0 1.5rem; padding: 1.75rem; border: 1px solid #e2e8f0; border-radius: 16px; background: #ffffff; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); }}
+        .question-card__number {{ display: inline-flex; align-items: center; min-height: 30px; padding: 0 0.8rem; border-radius: 99px; background: #eff6ff; color: #1d4ed8 !important; font-size: 0.85rem; font-weight: 700; letter-spacing: 0.03em; border: 1px solid #bfdbfe; }}
+        .question-card__text {{ margin: 1rem 0 0 !important; color: var(--sb-ink) !important; font-size: clamp(1.1rem, 1.8vw, 1.3rem); font-weight: 600; line-height: 1.7; }}
+        
+        /* Badges for Queries */
+        .status-badge {{ padding: 4px 10px; border-radius: 99px; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; display: inline-block; }}
+        .badge-pending {{ background: #fef3c7; color: #b45309; border: 1px solid #fde68a; }}
+        .badge-resolved {{ background: #dcfce7; color: #15803d; border: 1px solid #bbf7d0; }}
+        
         /* Controls, forms and feedback */
         div.stButton > button {{
-            min-height: 2.65rem !important;
-            padding: .55rem .9rem !important;
+            min-height: 2.8rem !important;
+            padding: 0.5rem 1.2rem !important;
             border: 1px solid #cbd5e1 !important;
-            border-radius: 10px !important;
+            border-radius: 12px !important;
             background: #ffffff !important;
             color: var(--sb-ink) !important;
-            font-size: .9rem !important;
-            font-weight: 700 !important;
-            transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease, background .16s ease !important;
+            font-size: 0.95rem !important;
+            font-weight: 600 !important;
+            transition: all 0.2s ease !important;
         }}
         div.stButton > button:hover:not(:disabled) {{
             border-color: #93c5fd !important;
-            background: #f8fbff !important;
-            box-shadow: 0 6px 16px rgba(37, 99, 235, .12) !important;
+            background: #f8fafc !important;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05) !important;
             transform: translateY(-1px);
         }}
-        div.stButton > button:focus-visible,
-        [data-baseweb="select"] input:focus-visible,
-        input:focus-visible {{ outline: 3px solid rgba(37, 99, 235, .35) !important; outline-offset: 2px; }}
-        div.stButton > button:disabled {{ opacity: .52 !important; cursor: not-allowed !important; }}
+        div.stButton > button:disabled {{ opacity: 0.6 !important; cursor: not-allowed !important; }}
+        
         div.stButton > button[kind="primary"] {{
             border-color: var(--sb-primary) !important;
-            background: linear-gradient(135deg, var(--sb-primary) 0%, #4f46e5 100%) !important;
+            background: var(--sb-primary) !important;
             color: #ffffff !important;
+            box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.2) !important;
         }}
         div.stButton > button[kind="primary"] * {{ color: #ffffff !important; }}
-        div.stButton > button[kind="primary"]:hover:not(:disabled) {{ box-shadow: 0 8px 20px rgba(37, 99, 235, .28) !important; }}
-        div.stButton > button[kind="secondary"] {{
-            background: #f8fafc !important;
-            border-color: #cbd5e1 !important;
-            color: var(--sb-ink) !important;
+        div.stButton > button[kind="primary"]:hover:not(:disabled) {{ 
+            background: var(--sb-primary-dark) !important;
+            box-shadow: 0 10px 15px -3px rgba(37, 99, 235, 0.3) !important; 
         }}
-        div.stButton > button[kind="secondary"] * {{ color: var(--sb-ink) !important; }}
+        
         div[data-baseweb="input"] > div,
-        div[data-baseweb="select"] > div {{ border-radius: 10px !important; border-color: #cbd5e1 !important; }}
-        div[data-baseweb="input"] > div:focus-within,
-        div[data-baseweb="select"] > div:focus-within {{ border-color: var(--sb-primary) !important; box-shadow: 0 0 0 3px rgba(37, 99, 235, .12) !important; }}
-        div[data-testid="stAlert"] {{ border-radius: 12px !important; border-width: 1px !important; }}
-        div[data-testid="stExpander"] {{ border: 1px solid var(--sb-border) !important; border-radius: 13px !important; background: #ffffff !important; overflow: hidden; }}
-        div[data-testid="stExpander"] details summary {{ padding: .2rem 0; font-weight: 750; }}
-        div[data-testid="stVerticalBlockBorderWrapper"] {{ border-radius: 14px !important; border-color: var(--sb-border) !important; box-shadow: 0 3px 12px rgba(15, 23, 42, .035); }}
-        div[data-testid="stDivider"] {{ margin: 1.15rem 0 !important; }}
+        div[data-baseweb="select"] > div,
+        div[data-baseweb="textarea"] > div {{ border-radius: 12px !important; border-color: #cbd5e1 !important; background-color: #f8fafc !important; }}
+        
+        div[data-testid="stExpander"] {{ border: 1px solid var(--sb-border) !important; border-radius: 16px !important; background: #ffffff !important; overflow: hidden; box-shadow: 0 1px 3px 0 rgba(0,0,0,0.05); }}
+        div[data-testid="stExpander"] details summary {{ padding: 0.5rem 0.25rem; font-weight: 700; color: #1e293b; font-size: 1.05rem; }}
+        div[data-testid="stDivider"] {{ margin: 1.5rem 0 !important; border-color: #e2e8f0; }}
 
         /* Option cards keep native radio behavior while making choices easier to scan. */
-        div[data-testid="stRadio"] [role="radiogroup"] {{ gap: .55rem; }}
+        div[data-testid="stRadio"] [role="radiogroup"] {{ gap: 0.75rem; }}
         div[data-testid="stRadio"] label {{
             align-items: center !important;
-            min-height: 3.1rem;
-            padding: .65rem .85rem !important;
-            border: 1px solid #dbe3ef;
-            border-radius: 10px;
+            min-height: 3.5rem;
+            padding: 0.75rem 1.25rem !important;
+            border: 1px solid #cbd5e1;
+            border-radius: 12px;
             background: #ffffff;
-            transition: border-color .16s ease, background .16s ease, transform .16s ease;
+            transition: all 0.2s ease;
+            box-shadow: 0 1px 2px 0 rgba(0,0,0,0.02);
+            font-size: 1.05rem;
         }}
-        div[data-testid="stRadio"] label:hover {{ border-color: #93c5fd; background: #f8fbff; transform: translateX(2px); }}
-        div[data-testid="stRadio"] label:has(input:checked) {{ border-color: var(--sb-primary); background: #eff6ff; box-shadow: 0 0 0 1px var(--sb-primary); }}
+        div[data-testid="stRadio"] label:hover {{ border-color: #93c5fd; background: #f8fafc; transform: translateX(3px); box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); }}
+        div[data-testid="stRadio"] label:has(input:checked) {{ 
+            border-color: var(--sb-primary); 
+            background: #eff6ff; 
+            box-shadow: 0 0 0 1.5px var(--sb-primary); 
+        }}
 
         /* Navigation */
         section[data-testid="stSidebar"] {{ background: #0f172a !important; border-right: 1px solid #1e293b; }}
         section[data-testid="stSidebar"] * {{ color: #e2e8f0 !important; }}
         section[data-testid="stSidebar"] div.stButton > button,
-        section[data-testid="stSidebar"] div.stButton > button * {{ background: transparent !important; border-color: transparent !important; color: #cbd5e1 !important; text-align: left !important; box-shadow: none !important; }}
+        section[data-testid="stSidebar"] div.stButton > button * {{ background: transparent !important; border-color: transparent !important; color: #cbd5e1 !important; text-align: left !important; box-shadow: none !important; font-size: 1.05rem !important; padding: 0.75rem !important; }}
         section[data-testid="stSidebar"] div.stButton > button:hover:not(:disabled),
-        section[data-testid="stSidebar"] div.stButton > button:hover:not(:disabled) * {{ background: rgba(148, 163, 184, .15) !important; color: #ffffff !important; transform: none; }}
-        section[data-testid="stSidebar"] div.stButton > button[kind="secondary"],
-        section[data-testid="stSidebar"] div.stButton > button[kind="secondary"] * {{ color: #fecaca !important; background: rgba(220, 38, 38, .12) !important; }}
-        section[data-testid="stSidebar"] [data-testid="stSidebarContent"] {{ padding-top: 1rem; }}
-        .sidebar-brand {{ margin: .3rem 0 1.2rem; padding: .85rem .8rem; border-radius: 12px; background: linear-gradient(135deg, rgba(37, 99, 235, .28), rgba(79, 70, 229, .16)); border: 1px solid rgba(147, 197, 253, .22); }}
-        .sidebar-brand strong {{ display: block; color: #ffffff !important; font-size: 1.05rem; letter-spacing: -.02em; }}
-        .sidebar-brand span {{ color: #bfdbfe !important; font-size: .73rem; }}
-        .sidebar-user {{ margin-bottom: .35rem; color: #f8fafc !important; font-size: .92rem; font-weight: 750; }}
-        .nav-current {{ margin: .35rem 0 1rem; padding: .65rem .75rem; border-radius: 9px; background: rgba(37, 99, 235, .23); border: 1px solid rgba(96, 165, 250, .3); color: #dbeafe !important; font-size: .8rem; font-weight: 700; }}
+        section[data-testid="stSidebar"] div.stButton > button:hover:not(:disabled) * {{ background: rgba(51, 65, 85, 0.5) !important; color: #ffffff !important; transform: none; border-radius: 8px !important; }}
+        section[data-testid="stSidebar"] [data-testid="stSidebarContent"] {{ padding-top: 1.5rem; }}
+        
+        .sidebar-brand {{ margin: 0.5rem 0 1.5rem; padding: 1rem; border-radius: 12px; background: linear-gradient(135deg, rgba(37, 99, 235, 0.4), rgba(79, 70, 229, 0.2)); border: 1px solid rgba(147, 197, 253, 0.2); }}
+        .sidebar-brand strong {{ display: block; color: #ffffff !important; font-size: 1.2rem; letter-spacing: -0.02em; font-weight: 800; }}
+        .sidebar-brand span {{ color: #bfdbfe !important; font-size: 0.8rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }}
+        
+        .nav-current {{ margin: 0.5rem 0 1.5rem; padding: 0.75rem 1rem; border-radius: 8px; background: rgba(59, 130, 246, 0.2); border: 1px solid rgba(96, 165, 250, 0.3); color: #bfdbfe !important; font-size: 0.85rem; font-weight: 600; display: flex; align-items: center; gap: 8px; }}
 
-        /* Tables and tabular content */
-        [data-testid="stDataFrame"] {{ border: 1px solid var(--sb-border); border-radius: 12px; overflow: hidden; }}
-        [data-testid="stDataFrame"] [role="columnheader"] {{ background: #f8fafc; font-weight: 800; }}
-
-        @media (max-width: 760px) {{
-            html {{ font-size: 15px; }}
-            .block-container {{ padding: .8rem !important; }}
-            .page-header {{ padding: 1.1rem; margin-bottom: 1rem; border-radius: 14px; }}
-            .metric-card {{ min-height: 100px; padding: .85rem; }}
-            div.stButton > button {{ min-height: 2.85rem !important; }}
-            div[data-testid="stRadio"] label {{ min-height: 3.35rem; }}
-            div[data-testid="stHorizontalBlock"] {{ flex-wrap: wrap !important; gap: .75rem !important; }}
+        /* Container specific overrides */
+        [data-testid="stContainer"] {{ border-radius: 16px; border-color: #e2e8f0; }}
+        
+        @media (max-width: 768px) {{
+            .block-container {{ padding: 1rem !important; border-radius: 0; border: none; margin: 0 !important; }}
+            .page-header {{ padding: 1.25rem; border-radius: 12px; }}
+            div[data-testid="stHorizontalBlock"] {{ flex-wrap: wrap !important; gap: 1rem !important; }}
             div[data-testid="stHorizontalBlock"] > div[data-testid="column"] {{ flex: 1 1 100% !important; width: 100% !important; min-width: 0 !important; }}
         }}
-        @media (prefers-reduced-motion: reduce) {{ * {{ transition: none !important; scroll-behavior: auto !important; }} }}
         </style>
     """, unsafe_allow_html=True)
 
@@ -881,26 +906,30 @@ def render_visual_timer():
     <html>
     <head>
         <style>
-            body {{ margin:0; padding:0; font-family: Inter, 'Segoe UI', sans-serif; background: transparent; }}
+            body {{ margin:0; padding:0; font-family: Inter, -apple-system, sans-serif; background: transparent; }}
             .timer-box {{
                 box-sizing: border-box;
-                min-height: 58px;
-                padding: 14px 12px;
-                border: 1px solid #fecaca;
-                border-radius: 12px;
-                background: linear-gradient(135deg, #fff7ed 0%, #fff1f2 100%);
-                color: #991b1b;
-                font-size: 21px;
+                min-height: 60px;
+                padding: 12px;
+                border: 2px solid #fecaca;
+                border-radius: 14px;
+                background: linear-gradient(135deg, #fff5f5 0%, #fff1f2 100%);
+                color: #e11d48;
+                font-size: 24px;
                 font-weight: 800;
                 text-align: center;
-                box-shadow: 0 5px 14px rgba(153, 27, 27, .08);
-                letter-spacing: .05em;
+                box-shadow: 0 4px 6px -1px rgba(225, 29, 72, 0.1);
+                letter-spacing: 0.05em;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                gap: 8px;
             }}
             .no-timer {{
-                background: linear-gradient(135deg, #eff6ff 0%, #ecfeff 100%);
+                background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
                 border-color: #bae6fd;
-                color: #075985;
-                font-size: 16px;
+                color: #0284c7;
+                font-size: 18px;
                 letter-spacing: 0;
             }}
         </style>
@@ -915,7 +944,7 @@ def render_visual_timer():
             var display = document.getElementById("time");
             
             if (!is_timed) {{
-                display.innerHTML = "No Time Limit";
+                display.innerHTML = "Practice Mode - No Time Limit";
             }} else {{
                 function updateDisplay() {{
                     if (rem <= 0) {{
@@ -937,7 +966,7 @@ def render_visual_timer():
     </body>
     </html>
     """
-    components.html(html_code, height=82)
+    components.html(html_code, height=85)
 
 # ==========================================
 # 6. PAGE RENDERING FUNCTIONS
@@ -946,29 +975,31 @@ def render_visual_timer():
 def render_login():
     users = get_all_users()
     
-    st.write("<br>", unsafe_allow_html=True)
+    st.write("<br><br>", unsafe_allow_html=True)
     col1, col2, col3 = st.columns([1, 1.5, 1]) 
     with col2:
         with st.container(border=True):
-            st.markdown("<h1 style='text-align: center; color:#172033 !important; font-weight:800; margin-bottom:.35rem;'>Study Booster</h1>", unsafe_allow_html=True)
-            st.markdown("<p style='text-align:center; font-size:1rem; color:#64748b !important; margin-top:0;'>Your focused space for practice, progress, and performance.</p>", unsafe_allow_html=True)
+            st.markdown("<h1 style='text-align: center; color:#1e293b !important; font-weight:800; margin-bottom:0.5rem;'>Study Booster</h1>", unsafe_allow_html=True)
+            st.markdown("<p style='text-align:center; font-size:1.1rem; color:#64748b !important; margin-top:0;'>Your focused space for practice, progress, and performance.</p>", unsafe_allow_html=True)
             st.divider()
             
             username = st.selectbox("👤 Select Profile", ["-- Select User --"] + list(users.keys()))
             pwd = st.text_input("🔑 Enter Passcode", type="password")
             
-            st.write("")
+            st.write("<br>", unsafe_allow_html=True)
             if st.button("Secure Login 🚀", type="primary", use_container_width=True):
                 if username != "-- Select User --" and users.get(username) == pwd:
-                    st.session_state.auth = True
-                    st.session_state.current_user = username
-                    st.session_state.active_page = "Dashboard"
-                    
-                    new_sid = base64.urlsafe_b64encode(os.urandom(12)).decode()
-                    st.session_state.sid = new_sid
-                    st.query_params["sid"] = new_sid
-                    
-                    st.rerun()
+                    with st.spinner("Authenticating secure session..."):
+                        time.sleep(0.5)  # Smooth transition effect
+                        st.session_state.auth = True
+                        st.session_state.current_user = username
+                        st.session_state.active_page = "Dashboard"
+                        
+                        new_sid = base64.urlsafe_b64encode(os.urandom(12)).decode()
+                        st.session_state.sid = new_sid
+                        st.query_params["sid"] = new_sid
+                        
+                        st.rerun()
                 else:
                     st.error("❌ Invalid Credentials! Please try again.")
 
@@ -976,39 +1007,107 @@ def render_sidebar():
     try:
         st.sidebar.image("logo.png", use_container_width=True)
     except:
-        st.sidebar.markdown("<div class='sidebar-brand'><strong>Study Booster</strong><span>CBT PRACTICE PLATFORM</span></div>", unsafe_allow_html=True)
+        st.sidebar.markdown("<div class='sidebar-brand'><strong>Study Booster</strong><span>EdTech Platform</span></div>", unsafe_allow_html=True)
 
     st.sidebar.markdown(f"### 👤 {st.session_state.current_user}")
     st.sidebar.markdown(
-        f"<div class='nav-current'>Current workspace &middot; {st.session_state.active_page}</div>",
+        f"<div class='nav-current'>🟢 Workspace &middot; {st.session_state.active_page}</div>",
         unsafe_allow_html=True,
     )
     st.sidebar.divider()
     
-    if "Admin" in st.session_state.current_user:
-        if st.sidebar.button("⚙️ Admin Control Panel", use_container_width=True):
-            st.session_state.active_page = "Admin"
-            st.rerun()
-            
     if st.sidebar.button("📚 Dashboard", use_container_width=True):
         st.session_state.active_page = "Dashboard"
         st.rerun()
         
+    if "Admin" in st.session_state.current_user:
+        if st.sidebar.button("⚙️ Admin Control Panel", use_container_width=True):
+            with st.spinner("Loading Admin Modules..."):
+                st.session_state.active_page = "Admin"
+                st.rerun()
+        if st.sidebar.button("💬 User Queries", use_container_width=True):
+            with st.spinner("Fetching queries..."):
+                st.session_state.active_page = "UserQueries"
+                st.rerun()
+                
     st.sidebar.divider()
     if st.sidebar.button("🚪 Logout", type="secondary", use_container_width=True):
-        if st.session_state.get("sid"):
-            session_path = os.path.join(SESSION_FOLDER, f"{st.session_state.sid}.pkl")
-            if os.path.exists(session_path):
-                try: os.remove(session_path)
-                except Exception: pass
+        with st.spinner("Logging out safely..."):
+            if st.session_state.get("sid"):
+                session_path = os.path.join(SESSION_FOLDER, f"{st.session_state.sid}.pkl")
+                if os.path.exists(session_path):
+                    try: os.remove(session_path)
+                    except Exception: pass
+            
+            if "sid" in st.query_params:
+                del st.query_params["sid"]
+                
+            for key in list(st.session_state.keys()):
+                del st.session_state[key]
+                
+            time.sleep(0.5)
+            st.rerun()
+
+def render_user_queries():
+    if "Admin" not in st.session_state.current_user:
+        st.error("Unauthorized access!")
+        return
         
-        if "sid" in st.query_params:
-            del st.query_params["sid"]
+    render_page_header(
+        "User Queries Management",
+        "View and respond to student doubts and technical queries.",
+        "Support Center",
+    )
+    
+    queries = load_queries()
+    
+    col1, col2 = st.columns([2, 1])
+    search_u = col1.text_input("🔍 Search by Username", placeholder="Type username...", key="admin_search_query")
+    filter_s = col2.selectbox("📁 Filter by Status", ["All", "Pending", "Resolved"], key="admin_filter_query")
+    
+    st.write("---")
+    
+    filtered = queries
+    if search_u: filtered = [q for q in filtered if search_u.lower() in q["user"].lower()]
+    if filter_s != "All": filtered = [q for q in filtered if q["status"] == filter_s]
+    
+    if not filtered:
+        st.info("No queries found matching the criteria.")
+        return
+        
+    for q in reversed(filtered):
+        with st.container(border=True):
+            q_date = q.get("datetime", "Unknown Date")
+            q_user = q.get("user", "Unknown")
+            q_status = q.get("status", "Pending")
+            q_text = q.get("text", "")
+            q_reply = q.get("reply", "")
             
-        for key in list(st.session_state.keys()):
-            del st.session_state[key]
+            badge_class = "badge-pending" if q_status == "Pending" else "badge-resolved"
             
-        st.rerun()
+            st.markdown(f"**{q_user}** &middot; <span style='color:#64748b; font-size:0.85rem;'>{q_date}</span> &middot; <span class='status-badge {badge_class}'>{q_status}</span>", unsafe_allow_html=True)
+            st.markdown(f"<div style='margin-top:8px; padding:12px; background:#f8fafc; border-radius:8px; border-left: 4px solid #cbd5e1; font-size:1rem; color:#1e293b;'>{q_text}</div>", unsafe_allow_html=True)
+            
+            if q_status == "Pending":
+                st.write("<br>", unsafe_allow_html=True)
+                reply_input = st.text_area("Write your reply:", key=f"reply_input_{q['id']}", placeholder="Enter a professional response here...")
+                if st.button("Mark as Resolved & Send", key=f"btn_resolve_{q['id']}", type="primary"):
+                    if reply_input.strip():
+                        with st.spinner("Updating query status..."):
+                            for i, item in enumerate(queries):
+                                if item["id"] == q["id"]:
+                                    queries[i]["reply"] = reply_input
+                                    queries[i]["status"] = "Resolved"
+                                    break
+                            save_queries(queries)
+                            st.toast("Reply sent and marked as resolved!", icon="✅")
+                            time.sleep(0.5)
+                            st.rerun()
+                    else:
+                        st.warning("Please enter a reply before marking resolved.")
+            else:
+                st.markdown(f"**Admin Reply:**")
+                st.success(q_reply)
 
 def render_admin():
     if "Admin" not in st.session_state.current_user:
@@ -1022,7 +1121,7 @@ def render_admin():
     )
     
     # Feature 4: Basic and Advanced banks isolated routing
-    with st.expander("📁 Admin Panel: Question Bank Management", expanded=False):
+    with st.expander("📁 Question Bank Management", expanded=False):
         admin_bank = st.radio("Select Question Bank", ["Basic", "Advanced"], horizontal=True, key="admin_bank_radio")
         if st.session_state.get('last_admin_bank') != admin_bank:
             st.session_state.admin_current_path = ""
@@ -1032,7 +1131,7 @@ def render_admin():
         current_admin_path = st.session_state.get('admin_current_path', '')
         full_admin_path = os.path.join(active_admin_base, current_admin_path.replace('/', os.sep))
         
-        st.markdown(f"**Current Folder ({admin_bank}):** `Question Bank / {current_admin_path.replace('/', ' / ')}`")
+        st.markdown(f"**Current Directory ({admin_bank}):** `Root / {current_admin_path.replace('/', ' / ')}`")
         
         c_up, c_newf, c_upld = st.columns(3)
         with c_up:
@@ -1043,16 +1142,18 @@ def render_admin():
             if st.button("Create Folder", use_container_width=True):
                 if new_f:
                     os.makedirs(os.path.join(full_admin_path, new_f), exist_ok=True)
+                    st.toast(f"Folder '{new_f}' created!", icon="✅")
                     st.rerun()
         with c_upld:
             uploaded_file = st.file_uploader("Upload CSV", type=['csv'], label_visibility="collapsed")
             if uploaded_file:
-                save_path = os.path.join(full_admin_path, uploaded_file.name)
-                with open(save_path, "wb") as f:
-                    f.write(uploaded_file.getbuffer())
-                st.success("Uploaded!")
-                time.sleep(1)
-                st.rerun()
+                with st.spinner("Uploading..."):
+                    save_path = os.path.join(full_admin_path, uploaded_file.name)
+                    with open(save_path, "wb") as f:
+                        f.write(uploaded_file.getbuffer())
+                    st.toast("File uploaded successfully!", icon="✅")
+                    time.sleep(0.5)
+                    st.rerun()
                 
         st.write("---")
         
@@ -1075,26 +1176,28 @@ def render_admin():
                 fc1, fc2, fc3, fc4 = st.columns([3, 4, 2, 2])
                 fc1.button(f"📁 {folder}", key=f"nav_{current_admin_path}_{folder}", on_click=nav_admin_down, args=(folder,), use_container_width=True)
                 if current_admin_path == "" and folder in ["Arts", "Computer", "Current affairs", "Science", "Statistics"]:
-                    fc2.markdown("<div style='padding-top:10px; color:#94a3b8; font-size:12px; font-weight:bold;'>System Folder</div>", unsafe_allow_html=True)
+                    fc2.markdown("<div style='padding-top:10px; color:#94a3b8; font-size:12px; font-weight:bold;'>System Protected</div>", unsafe_allow_html=True)
                 else:
                     new_folder_name = fc2.text_input("Rename Folder", value=folder, key=f"ren_fld_inp_{current_admin_path}_{folder}", label_visibility="collapsed")
                     if fc3.button("✏️ Rename", key=f"ren_fld_btn_{current_admin_path}_{folder}", use_container_width=True):
                         if new_folder_name and new_folder_name.strip() and new_folder_name.strip() != folder:
                             try:
                                 os.rename(os.path.join(full_admin_path, folder), os.path.join(full_admin_path, new_folder_name.strip()))
+                                st.toast(f"Renamed to {new_folder_name.strip()}", icon="✅")
                                 st.rerun()
                             except Exception as e:
                                 st.error(f"Error renaming folder: {e}")
                     if fc4.button("🗑️ Delete", key=f"del_f_{current_admin_path}_{folder}", use_container_width=True):
                         try:
                             os.rmdir(os.path.join(full_admin_path, folder))
+                            st.toast("Folder deleted", icon="✅")
                             st.rerun()
                         except OSError:
                             st.error("Folder not empty! Delete files inside first.")
                         
         st.write("---")
-        st.markdown("#### Files")
-        if not files: st.info("No files in this folder.")
+        st.markdown("#### Assessment Files")
+        if not files: st.info("No CSV files found in this directory.")
         
         all_folders = []
         for root, dirs, _ in os.walk(active_admin_base):
@@ -1110,13 +1213,14 @@ def render_admin():
             with st.container(border=True):
                 c1, c2 = st.columns([8, 2])
                 c1.markdown(f"📄 **{f_name}**")
-                c2.markdown(f"{f_size:.1f} KB")
+                c2.markdown(f"<span style='color:#64748b; font-size:0.9rem;'>{f_size:.1f} KB</span>", unsafe_allow_html=True)
                 
                 mc1, mc2, mc3, mc4 = st.columns([3, 4, 2, 2])
                 move_target = mc1.selectbox("Move to", ["-- Select --"] + all_folders, key=f"mov_{current_admin_path}_{f_name}", label_visibility="collapsed")
                 if move_target != "-- Select --":
                     tgt = active_admin_base if move_target == "Root" else os.path.join(active_admin_base, move_target.replace('/', os.sep))
                     os.rename(file_p, os.path.join(tgt, f_name))
+                    st.toast(f"Moved {f_name}", icon="✅")
                     st.rerun()
                 
                 new_f_name = mc2.text_input("Rename File", value=f_name, key=f"ren_inp_{current_admin_path}_{f_name}", label_visibility="collapsed")
@@ -1127,25 +1231,26 @@ def render_admin():
                             clean_name += '.csv'
                         try:
                             os.rename(file_p, os.path.join(full_admin_path, clean_name))
+                            st.toast("File renamed successfully", icon="✅")
                             st.rerun()
                         except Exception as e:
                             st.error(f"Error renaming file: {e}")
                             
                 if mc4.button("🗑️ Delete", key=f"del_{current_admin_path}_{f_name}", use_container_width=True):
                     os.remove(file_p)
+                    st.toast("File deleted", icon="✅")
                     st.rerun()
 
-    # Combine options for all Administrative forms to allow unified settings for both Banks
     all_basic = get_all_csv_files(CSV_FOLDER)
     all_adv = get_all_csv_files(ADVANCED_CSV_FOLDER)
     admin_file_options = {}
     for f in all_basic: admin_file_options[f"Basic | {f}"] = f
     for f in all_adv: admin_file_options[f"Advanced | {f}"] = f"ADVANCED|{f}"
 
-    with st.expander("⏱️ Admin Panel: Timer Management", expanded=False):
-        st.markdown("Configure timer rules for each test individually.")
+    with st.expander("⏱️ Timer Configuration", expanded=False):
+        st.markdown("Set precise examination time constraints for tests.")
         if admin_file_options:
-            sel_display = st.selectbox("Select Test to Configure Timer", list(admin_file_options.keys()), key="tmr_test")
+            sel_display = st.selectbox("Select Assessment", list(admin_file_options.keys()), key="tmr_test")
             t_file = admin_file_options[sel_display]
             
             if t_file:
@@ -1153,7 +1258,7 @@ def render_admin():
                 current_settings = timers_data.get(t_file, {"mode": "Total Time", "value": 30})
                 
                 new_mode = st.radio(
-                    "Timer Mode", 
+                    "Timing Rule", 
                     ["Total Time", "Per Question", "No Timer"], 
                     index=["Total Time", "Per Question", "No Timer"].index(current_settings["mode"])
                 )
@@ -1166,95 +1271,100 @@ def render_admin():
                 else:
                     new_val = 0 
                 
-                if st.button("Save Timer Settings", type="primary"):
-                    timers_data[t_file] = {"mode": new_mode, "value": new_val}
-                    save_timers_data(timers_data)
-                    st.success(f"✅ Timer settings saved for {sel_display}!")
+                if st.button("Save Configuration", type="primary"):
+                    with st.spinner("Saving..."):
+                        timers_data[t_file] = {"mode": new_mode, "value": new_val}
+                        save_timers_data(timers_data)
+                        st.toast("Timer settings updated!", icon="✅")
         else:
             st.info("No tests available to configure.")
 
-    with st.expander("⚙️ Admin Panel: Attempt Management", expanded=False):
-        st.markdown("Select a user and a test to modify attempt limits.")
+    with st.expander("⚙️ Assessment Access Control", expanded=False):
+        st.markdown("Control maximum attempt limits per user.")
         a_col1, a_col2 = st.columns(2)
         users = get_all_users()
         with a_col1:
-            sel_user = st.selectbox("Select User", list(users.keys()), key="adm_user")
+            sel_user = st.selectbox("Select Learner", list(users.keys()), key="adm_user")
         with a_col2:
             if admin_file_options:
-                sel_test_display = st.selectbox("Select Test", list(admin_file_options.keys()), key="adm_test")
+                sel_test_display = st.selectbox("Select Assessment", list(admin_file_options.keys()), key="adm_test")
                 sel_test = admin_file_options[sel_test_display]
             else:
                 sel_test = None
         
         if sel_user and sel_test:
             curr_data = get_attempt_data(sel_user, sel_test)
-            new_limit = st.number_input("Allowed Attempts", min_value=1, value=curr_data['allowed'], key="adm_limit")
-            if st.button("Update Limit", type="primary", key="btn_update_limit"):
-                set_allowed_attempts(sel_user, sel_test, new_limit)
-                st.success(f"✅ Updated! {sel_user.split()[0]} now has {new_limit} allowed attempts for {sel_test_display}.")
+            new_limit = st.number_input("Allowed Attempts Limit", min_value=1, value=curr_data['allowed'], key="adm_limit")
+            if st.button("Update Access Limit", type="primary", key="btn_update_limit"):
+                with st.spinner("Processing..."):
+                    set_allowed_attempts(sel_user, sel_test, new_limit)
+                    st.toast(f"Updated! {sel_user.split()[0]} now has {new_limit} allowed attempts.", icon="✅")
 
-    # Feature 3: Negative Marking Configuration
-    with st.expander("⚖️ Admin Panel: Negative Marking Configuration", expanded=False):
-        st.markdown("Set negative marking (Range 0.00 to 0.33) deducted for incorrect answers.")
+    with st.expander("⚖️ Scoring & Penalty Configuration", expanded=False):
+        st.markdown("Configure negative marking deductions for incorrect answers (0.00 to 0.33).")
         if admin_file_options:
-            sel_display_nm = st.selectbox("Select Test for Negative Marking", list(admin_file_options.keys()), key="nm_sel_test")
+            sel_display_nm = st.selectbox("Select Assessment for Modification", list(admin_file_options.keys()), key="nm_sel_test")
             nm_test_key = admin_file_options[sel_display_nm]
             
             curr_val = get_neg_mark(nm_test_key)
-            new_val = st.number_input("Negative Marks per Incorrect Answer", min_value=0.0, max_value=0.33, value=float(curr_val), step=0.01)
+            new_val = st.number_input("Negative Penalty Value", min_value=0.0, max_value=0.33, value=float(curr_val), step=0.01)
             
-            if st.button("Save Negative Marking", type="primary"):
-                set_neg_mark(nm_test_key, new_val)
-                st.success(f"✅ Negative marking updated to {new_val} for {sel_display_nm}!")
+            if st.button("Apply Penalty Rule", type="primary"):
+                with st.spinner("Applying rule..."):
+                    set_neg_mark(nm_test_key, new_val)
+                    st.toast(f"Negative marking set to {new_val}", icon="✅")
         else:
             st.info("No tests available to configure.")
 
-    # Feature 1: Complete User Management Panel
-    with st.expander("👥 Admin Panel: User Management", expanded=False):
+    with st.expander("👥 User Management", expanded=False):
         users = get_all_users()
-        um_tabs = st.tabs(["Add User", "Remove User", "Change Password"])
+        um_tabs = st.tabs(["Add New User", "Remove User", "Reset Password"])
         
         with um_tabs[0]:
             new_u = st.text_input("New Username (Format: Name (Role))")
-            new_p = st.text_input("Password", type="password")
-            if st.button("Add User", type="primary"):
+            new_p = st.text_input("Account Password", type="password")
+            if st.button("Create Account", type="primary"):
                 if new_u in users:
-                    st.error("Username already exists!")
+                    st.error("Username already exists in the system!")
                 elif new_u and new_p:
-                    users[new_u] = new_p
-                    save_users(users)
-                    st.success(f"Added user: {new_u}")
-                    st.rerun()
+                    with st.spinner("Provisioning account..."):
+                        users[new_u] = new_p
+                        save_users(users)
+                        st.toast(f"Account '{new_u}' successfully created!", icon="✅")
+                        time.sleep(0.5)
+                        st.rerun()
                     
         with um_tabs[1]:
-            del_u = st.selectbox("Select User to Remove", [u for u in users if "Admin" not in u])
-            confirm_del = st.checkbox(f"I confirm I want to permanently delete {del_u}")
-            if st.button("Delete User", type="primary"):
+            del_u = st.selectbox("Select Account to Delete", [u for u in users if "Admin" not in u])
+            confirm_del = st.checkbox(f"Permanently delete {del_u} and all associated data.")
+            if st.button("Delete Account", type="primary"):
                 if confirm_del and del_u:
-                    del users[del_u]
-                    save_users(users)
-                    st.success("User deleted!")
-                    st.rerun()
+                    with st.spinner("Removing user..."):
+                        del users[del_u]
+                        save_users(users)
+                        st.toast("User account permanently deleted.", icon="✅")
+                        time.sleep(0.5)
+                        st.rerun()
                 elif not confirm_del:
-                    st.warning("Please confirm deletion.")
+                    st.warning("Confirmation checkbox is required for deletion.")
                     
         with um_tabs[2]:
-            ch_u = st.selectbox("Select User", list(users.keys()), key="ch_u")
-            ch_p = st.text_input("New Password", type="password", key="ch_p")
-            if st.button("Change Password", type="primary"):
+            ch_u = st.selectbox("Target Account", list(users.keys()), key="ch_u")
+            ch_p = st.text_input("New Secure Password", type="password", key="ch_p")
+            if st.button("Reset Password", type="primary"):
                 if ch_p:
-                    users[ch_u] = ch_p
-                    save_users(users)
-                    st.success("Password updated immediately!")
+                    with st.spinner("Updating credentials..."):
+                        users[ch_u] = ch_p
+                        save_users(users)
+                        st.toast("Password has been reset successfully.", icon="✅")
 
-    # Feature 2: User Progress Report Dashboard
-    with st.expander("📊 Admin Panel: User Progress Report", expanded=False):
+    with st.expander("📊 Learner Progress Reports", expanded=False):
         users = get_all_users()
-        rep_u = st.selectbox("Select User for Report", list(users.keys()))
+        rep_u = st.selectbox("Select Learner Profile", list(users.keys()))
         if rep_u:
             history = load_history().get(rep_u, [])
             if not history:
-                st.info(f"No attempt history found for {rep_u}.")
+                st.info(f"No assessment records found for {rep_u}.")
             else:
                 total_tests = len(set(h['test_name'] for h in history))
                 total_attempts = len(history)
@@ -1266,38 +1376,37 @@ def render_admin():
                 low_score = min(scores) if scores else 0
                 last_attempt = history[-1]['datetime'] if history else "N/A"
                 
-                st.markdown("#### Overall Summary")
+                st.markdown("#### Performance Summary")
                 c1, c2, c3, c4 = st.columns(4)
-                c1.metric("Total Tests", total_tests)
-                c2.metric("Total Attempts", total_attempts)
-                c3.metric("Highest Score", f"{high_score:.2f}")
-                c4.metric("Lowest Score", f"{low_score:.2f}")
+                with c1: render_metric_card("Total Tests", total_tests, "blue")
+                with c2: render_metric_card("Total Attempts", total_attempts, "purple")
+                with c3: render_metric_card("Highest Score", f"{high_score:.2f}", "green")
+                with c4: render_metric_card("Lowest Score", f"{low_score:.2f}", "amber")
                 
                 c5, c6, c7, c8 = st.columns(4)
-                c5.metric("Avg Score", f"{avg_score:.2f}")
-                c6.metric("Avg Percentage", f"{avg_perc:.2f}%")
-                c7.metric("Last Attempt", last_attempt)
+                with c5: render_metric_card("Avg Score", f"{avg_score:.2f}", "blue")
+                with c6: render_metric_card("Avg Percentage", f"{avg_perc:.2f}%", "purple")
+                with c7: render_metric_card("Last Active", last_attempt.split()[0], "green")
                 
                 st.write("---")
-                st.markdown("#### Attempt History")
+                st.markdown("#### Complete History Transcript")
                 for att in reversed(history):
                     result_status = "Pass" if att['percentage'] >= 33 else "Fail"
-                    with st.expander(f"Attempt {att['attempt_number']} - {att['test_name']} ({att['datetime']}) | Score: {att['final_score']:.2f} | {result_status}"):
-                        st.write(f"**Subject:** {att['subject']} | **Folder:** {att['folder']}")
-                        st.write(f"**Total Qs:** {att['total_questions']} | **Attempted:** {att['attempted']} | **Correct:** {att['correct']} | **Incorrect:** {att['incorrect']} | **Unanswered:** {att['unanswered']}")
-                        st.write(f"**Marks Obtained:** {att['marks_obtained']} | **Negative Marks:** {att['negative_marks']:.2f} | **Final Score:** {att['final_score']:.2f} | **Percentage:** {att['percentage']}%")
+                    with st.expander(f"Attempt {att['attempt_number']} - {att['test_name']} ({att['datetime']}) | Final Score: {att['final_score']:.2f}"):
+                        st.markdown(f"**Section:** {att['subject']} | **Category:** {att['folder']} | **Result:** <span style='color:{'#16a34a' if result_status=='Pass' else '#dc2626'}; font-weight:bold;'>{result_status}</span>", unsafe_allow_html=True)
+                        st.write(f"**Total Questions:** {att['total_questions']} &middot; **Attempted:** {att['attempted']} &middot; **Correct:** {att['correct']} &middot; **Incorrect:** {att['incorrect']} &middot; **Unanswered:** {att['unanswered']}")
+                        st.write(f"**Positive Marks:** {att['marks_obtained']} &middot; **Penalty Deductions:** {att['negative_marks']:.2f} &middot; **Final Percentage:** {att['percentage']}%")
                         
-                        st.markdown("##### Detailed Question Report")
+                        st.markdown("##### Detailed Answer Trace")
                         for qd in att['q_details']:
                             st.markdown(f"**Q{qd['q_num']}. {qd['question']}**")
                             c_a, c_b, c_c = st.columns(3)
                             c_a.write(f"**Selected:** {qd['user_ans']}")
-                            c_b.write(f"**Correct:** {qd['correct_ans']}")
-                            status_color = "green" if qd['status'] == "Correct" else "red" if qd['status'] == "Incorrect" else "orange"
-                            c_c.markdown(f"**Status:** <span style='color:{status_color}'>{qd['status']}</span>", unsafe_allow_html=True)
-                            st.write(f"**Marks:** {qd['marks']} | **Negative:** {qd['negative']:.2f}")
+                            c_b.write(f"**Correct Key:** {qd['correct_ans']}")
+                            status_color = "#16a34a" if qd['status'] == "Correct" else "#dc2626" if qd['status'] == "Incorrect" else "#d97706"
+                            c_c.markdown(f"**Validation:** <span style='color:{status_color}; font-weight:700;'>{qd['status']}</span>", unsafe_allow_html=True)
+                            st.write(f"**Marks:** {qd['marks']} | **Penalty:** {qd['negative']:.2f}")
                             st.write("---")
-
 
 def render_dashboard():
     first_name = st.session_state.current_user.split()[0] if st.session_state.current_user else "Learner"
@@ -1318,7 +1427,7 @@ def render_dashboard():
         
         active_user_base = CSV_FOLDER if st.session_state.current_bank == "Basic" else ADVANCED_CSV_FOLDER
         
-        search_query = st.text_input("🔍 Search Test, Subject, or Folder...", "").strip()
+        search_query = st.text_input("🔍 Search Subject or Folder...", placeholder="e.g. Physics, History...", key="dash_search").strip()
         
         all_files = get_all_csv_files(active_user_base)
         files_to_display = []
@@ -1345,11 +1454,12 @@ def render_dashboard():
                 
                 files_to_display = [f for f in all_files if f.startswith(filter_prefix)]
         
+        st.write("<br>", unsafe_allow_html=True)
         if not files_to_display: 
-            st.info("No tests found matching your criteria.")
+            st.info("No assessments found matching your search criteria.")
         else:
-            with st.container(border=True):
-                for file in files_to_display:
+            for file in files_to_display:
+                with st.container(border=True):
                     user = st.session_state.current_user
                     test_key = file if st.session_state.current_bank == "Basic" else f"ADVANCED|{file}"
                     
@@ -1362,30 +1472,91 @@ def render_dashboard():
                     folder_context = os.path.dirname(file) or 'Root'
 
                     c1, c2 = st.columns([3, 1])
-                    c1.markdown(f"<h5 style='margin-top: 10px; margin-bottom: 2px;'>📄 {base_name}</h5>", unsafe_allow_html=True)
-                    c1.markdown(f"<p style='font-size: 0.8rem; color: #94a3b8; margin-top: 0; margin-bottom: 2px;'>📂 {folder_context.replace('/', ' / ')}</p>", unsafe_allow_html=True)
+                    c1.markdown(f"<h4 class='test-card-title'>📄 {base_name}</h4>", unsafe_allow_html=True)
+                    c1.markdown(f"<div class='test-card-folder'>📁 {folder_context.replace('/', ' / ')}</div>", unsafe_allow_html=True)
                     
-                    c1.markdown(f"<p style='font-size: 0.85rem; color: #64748b; margin-top: 0;'>Attempts: {used} / {allowed} &nbsp;|&nbsp; Remaining: {remaining}</p>", unsafe_allow_html=True)
+                    c1.markdown(f"<div class='test-card-stats'>Attempts: {used} / {allowed} &nbsp;&middot;&nbsp; Remaining: {remaining}</div>", unsafe_allow_html=True)
                     
                     if remaining > 0:
-                        if c2.button("Load Test", key=f"load_{test_key}"):
+                        if c2.button("Start Assessment", key=f"load_{test_key}"):
                             load_quiz(file)
                     else:
-                        c2.button("Limit Reached", key=f"limit_{test_key}", disabled=True, help="You have reached the maximum number of attempts allowed for this test. Please contact the administrator.")
-                    st.divider()
+                        c2.button("Limit Reached", key=f"limit_{test_key}", disabled=True, help="Maximum attempts reached. Please contact your administrator.")
+                        
+        st.write("---")
+        
+        # --- FEATURE 5: Ask Query Section ---
+        st.markdown("### 💬 Ask a Query / Support")
+        with st.expander("Submit a new academic or technical query", expanded=False):
+            query_text = st.text_area(
+                "Describe your doubt clearly:", 
+                placeholder="E.g., I need clarification on Modern Physics Question 4...",
+                height=120,
+                key="new_query_text"
+            )
+            
+            # Simple python-side word counting for limits
+            word_count = len(re.findall(r'\w+', query_text))
+            st.caption(f"Word count updates when submitting. Limit: 100 words. (Current: {word_count})")
+            
+            if st.button("Submit Query", type="primary", key="btn_submit_query"):
+                if word_count == 0:
+                    st.warning("Query cannot be empty.")
+                elif word_count > 100:
+                    st.error("Your query exceeds the maximum limit of 100 words.")
+                else:
+                    with st.spinner("Submitting your query..."):
+                        queries = load_queries()
+                        queries.append({
+                            "id": str(uuid.uuid4()),
+                            "user": st.session_state.current_user,
+                            "datetime": time.strftime("%Y-%m-%d %H:%M:%S"),
+                            "text": query_text,
+                            "status": "Pending",
+                            "reply": ""
+                        })
+                        save_queries(queries)
+                        st.toast("Query successfully submitted to Admin!", icon="✅")
+                        st.session_state.query_input = ""  # Trigger clear logic if needed via callback
+                        time.sleep(0.5)
+                        st.rerun()
+                        
+        # Display User's past queries
+        st.write("<br>", unsafe_allow_html=True)
+        st.markdown("#### Past Queries History")
+        user_queries = load_queries()
+        user_history = [q for q in user_queries if q.get("user") == st.session_state.current_user]
+        
+        if not user_history:
+            st.info("You haven't submitted any queries yet.")
+        else:
+            for q in reversed(user_history):
+                with st.container(border=True):
+                    q_status = q.get("status", "Pending")
+                    badge_class = "badge-pending" if q_status == "Pending" else "badge-resolved"
+                    
+                    st.markdown(f"<span style='color:#64748b; font-size:0.85rem;'>Submitted: {q.get('datetime', 'N/A')}</span> &middot; <span class='status-badge {badge_class}'>{q_status}</span>", unsafe_allow_html=True)
+                    st.markdown(f"<div style='margin-top:8px; font-weight:600; color:#1e293b;'>{q.get('text', '')}</div>", unsafe_allow_html=True)
+                    
+                    if q_status == "Resolved" and q.get("reply"):
+                        st.write("---")
+                        st.markdown("<p style='font-size:0.85rem; color:#64748b; margin:0 0 4px 0; text-transform:uppercase; font-weight:700;'>Admin Reply</p>", unsafe_allow_html=True)
+                        st.success(q.get("reply"))
                         
     if st.session_state.quiz_ready:
         st.divider()
-        st.success(f"✅ **{st.session_state.topic}** is loaded and ready.")
+        st.success(f"✅ Assessment **{st.session_state.topic}** has been securely loaded into the engine.")
         col_space1, col_start, col_space2 = st.columns([1, 2, 1])
         with col_start:
             if st.button("🚀 Proceed to Instructions", type="primary", use_container_width=True):
-                st.session_state.active_page = "Instructions"
-                st.rerun()
+                with st.spinner("Navigating..."):
+                    st.session_state.active_page = "Instructions"
+                    time.sleep(0.3)
+                    st.rerun()
 
 def render_instructions():
     render_page_header(
-        "Instructions",
+        "Important Instructions",
         st.session_state.topic,
         "Before you begin",
     )
@@ -1393,49 +1564,53 @@ def render_instructions():
     col1, col2, col3 = st.columns([1, 3, 1])
     with col2:
         with st.container(border=True):
-            st.markdown("### Please read carefully before starting:")
+            st.markdown("### Assessment Guidelines")
             st.markdown(f"🔹 **Total Questions:** {len(st.session_state.questions)}")
             
             time_display_str = "No Time Limit"
             if st.session_state.timer_mode != "No Timer":
                 time_display_str = f"{st.session_state.time_val} Minutes"
 
-            st.markdown(f"🔹 **Time Limit:** {time_display_str}")
+            st.markdown(f"🔹 **Time Limit Constraint:** {time_display_str}")
             
             neg_mark_display = get_neg_mark(st.session_state.current_test_filename)
             if neg_mark_display > 0:
-                st.markdown(f"🔹 **Negative Marking:** -{neg_mark_display} for every incorrect answer.")
+                st.markdown(f"🔹 **Penalty Rules:** -{neg_mark_display} deducted for every incorrect submission.")
             
             st.markdown("""
             🔹 **Navigation:** You can jump to any question using the Question Palette on the right.
-            🔹 **Auto-Pause:** If you become completely inactive for **5 minutes**, the exam will pause itself to save your time safely.
-            🔹 **Marking Scheme:** Every correct answer adds to your score.
-            🔹 **Submission:** Exam submits automatically when timer hits zero.
+            🔹 **Auto-Pause:** If you become inactive for **5 minutes**, the exam freezes automatically to secure your timing.
+            🔹 **Marking Scheme:** Every correct answer adds positive marks to your overall score.
+            🔹 **Submission:** Exam validates and submits automatically when the timer reaches zero.
             """)
             
             st.write("<br>", unsafe_allow_html=True)
-            if st.button("✅ I have read the instructions. Begin Exam.", type="primary", use_container_width=True):
-                now = time.time()
-                st.session_state.last_calc_time = now
-                st.session_state.last_interaction_time = now
-                st.session_state.is_paused = False
-                st.session_state.active_page = "Exam"
-                st.rerun()
+            if st.button("✅ I confirm I have read all guidelines. Begin Exam.", type="primary", use_container_width=True):
+                with st.spinner("Initializing live examination engine..."):
+                    now = time.time()
+                    st.session_state.last_calc_time = now
+                    st.session_state.last_interaction_time = now
+                    st.session_state.is_paused = False
+                    st.session_state.active_page = "Exam"
+                    time.sleep(0.4)
+                    st.rerun()
 
 def render_paused_screen():
     st.write("<br><br>", unsafe_allow_html=True)
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
         with st.container(border=True):
-            st.markdown("<h1 style='text-align: center; color: #b91c1c;'>⏸ Exam Paused</h1>", unsafe_allow_html=True)
-            st.markdown("<p style='text-align: center; color: #475569; font-size: 1.1rem;'>Your timer has been frozen and your progress is safely saved.</p>", unsafe_allow_html=True)
+            st.markdown("<h1 style='text-align: center; color: #dc2626;'>⏸ Exam Paused</h1>", unsafe_allow_html=True)
+            st.markdown("<p style='text-align: center; color: #475569; font-size: 1.1rem;'>Your timer has been frozen and your progress is securely cached.</p>", unsafe_allow_html=True)
             st.write("---")
-            if st.button("▶️ Resume Test", type="primary", use_container_width=True):
-                now = time.time()
-                st.session_state.last_calc_time = now
-                st.session_state.last_interaction_time = now
-                st.session_state.is_paused = False
-                st.rerun()
+            if st.button("▶️ Resume Assessment", type="primary", use_container_width=True):
+                with st.spinner("Resuming engine..."):
+                    now = time.time()
+                    st.session_state.last_calc_time = now
+                    st.session_state.last_interaction_time = now
+                    st.session_state.is_paused = False
+                    time.sleep(0.3)
+                    st.rerun()
 
 def render_exam():
     if st.session_state.is_paused:
@@ -1473,41 +1648,43 @@ def render_exam():
             
     # ================== RIGHT PANEL ==================
     with col_pal:
-        st.markdown("<p class='palette-title'>Exam controls</p>", unsafe_allow_html=True)
+        st.markdown("<p class='palette-title'>Exam Controls & Timer</p>", unsafe_allow_html=True)
         render_visual_timer()
-        st.button("⏸ Pause", type="secondary", on_click=pause_exam, use_container_width=True, key="btn_pause_top")
+        
+        st.write("<div style='margin-top:10px;'></div>", unsafe_allow_html=True)
+        st.button("⏸ Pause Exam", type="secondary", on_click=pause_exam, use_container_width=True, key="btn_pause_top")
         
         username_display = st.session_state.current_user.split()[0]
         avatar_letter = username_display[0].upper() if username_display else "U"
         
         html_legend = f"""
-<div style="background-color: #ffffff; padding: 15px; border-bottom: 1px solid #bfdbfe; margin: 10px -1.5rem 0 -1.5rem;">
+<div style="background-color: #ffffff; padding: 15px; border: 1px solid #e2e8f0; border-radius: 12px; margin: 15px 0;">
 <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
-<div style="width: 34px; height: 34px; background-color: #3b82f6; color: white; border-radius: 50%; display: flex; justify-content: center; align-items: center; font-weight: bold; font-size: 16px;">
-<img src="https://ui-avatars.com/api/?name={username_display}&background=3b82f6&color=fff&rounded=true&bold=true&size=34" style="border-radius: 50%;" onerror="this.style.display='none'; this.parentElement.innerText='{avatar_letter}';">
+<div style="width: 34px; height: 34px; background-color: #2563eb; color: white; border-radius: 50%; display: flex; justify-content: center; align-items: center; font-weight: bold; font-size: 16px;">
+<img src="https://ui-avatars.com/api/?name={username_display}&background=2563eb&color=fff&rounded=true&bold=true&size=34" style="border-radius: 50%;" onerror="this.style.display='none'; this.parentElement.innerText='{avatar_letter}';">
 </div>
-<span style="font-weight: 600; color: #1e293b; font-size: 15px;">{username_display}</span>
+<span style="font-weight: 700; color: #1e293b; font-size: 15px;">{username_display}'s Session</span>
 </div>
-<div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px 4px; font-size: 11px; color: #475569;">
-<div style="display: flex; align-items: center; gap: 4px;">
-<div style="width: 18px; height: 18px; background-color: #2bc765; color: white; border-radius: 50% 50% 0 0; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 10px;">{ans_count}</div>
-<span>Answered</span>
+<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px 8px; font-size: 11px; color: #475569;">
+<div style="display: flex; align-items: center; gap: 6px;">
+<div style="width: 20px; height: 20px; background-color: #16a34a; color: white; border-radius: 6px 6px 0 0; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 11px;">{ans_count}</div>
+<span style="font-weight:600;">Answered</span>
 </div>
-<div style="display: flex; align-items: center; gap: 4px;">
-<div style="width: 18px; height: 18px; background-color: #9d48b1; color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 10px;">{marked_count}</div>
-<span>Marked</span>
+<div style="display: flex; align-items: center; gap: 6px;">
+<div style="width: 20px; height: 20px; background-color: #7c3aed; color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 11px;">{marked_count}</div>
+<span style="font-weight:600;">Marked</span>
 </div>
-<div style="display: flex; align-items: center; gap: 4px;">
-<div style="width: 18px; height: 18px; background-color: #ffffff; border: 1px solid #cbd5e1; color: #333; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 10px;">{not_visit_count}</div>
-<span>Not Visited</span>
+<div style="display: flex; align-items: center; gap: 6px;">
+<div style="width: 20px; height: 20px; background-color: #ffffff; border: 1px solid #cbd5e1; color: #334155; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 11px;">{not_visit_count}</div>
+<span style="font-weight:600;">Not Visited</span>
 </div>
-<div style="display: flex; align-items: center; gap: 4px; grid-column: span 2;">
-<div style="width: 18px; height: 18px; background-color: #9d48b1; color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 10px; position: relative; overflow: visible;">{ans_marked_count}<div style="position: absolute; bottom: -2px; right: -2px; width: 8px; height: 8px; background-color: #2bc765; border-radius: 50%; border: 1px solid white;"></div></div>
-<span>Marked and answered</span>
+<div style="display: flex; align-items: center; gap: 6px;">
+<div style="width: 20px; height: 20px; background-color: #ef4444; color: white; border-radius: 0 0 6px 6px; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 11px;">{not_ans_count}</div>
+<span style="font-weight:600;">Not Answered</span>
 </div>
-<div style="display: flex; align-items: center; gap: 4px;">
-<div style="width: 18px; height: 18px; background-color: #e55a45; color: white; border-radius: 0 0 50% 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 10px;">{not_ans_count}</div>
-<span>Not Answered</span>
+<div style="display: flex; align-items: center; gap: 6px; grid-column: span 2;">
+<div style="width: 20px; height: 20px; background-color: #7c3aed; color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 11px; position: relative; overflow: visible;">{ans_marked_count}<div style="position: absolute; bottom: -2px; right: -2px; width: 8px; height: 8px; background-color: #16a34a; border-radius: 50%; border: 1px solid white;"></div></div>
+<span style="font-weight:600;">Marked and Answered</span>
 </div>
 </div>
 </div>
@@ -1515,8 +1692,8 @@ def render_exam():
         st.markdown(html_legend, unsafe_allow_html=True)
         
         st.markdown(
-            f"""<div style='background-color:#dbeafe; padding:8px 15px; font-weight:700; color:#1e3a8a; font-size:12px; text-transform: uppercase; margin: 0 -1.5rem 10px -1.5rem; border-bottom: 1px solid #bfdbfe;'>
-            SECTION : {st.session_state.topic}
+            f"""<div style='background:linear-gradient(90deg, #eff6ff, #dbeafe); padding:10px 15px; font-weight:800; color:#1e3a8a; font-size:12px; text-transform: uppercase; border-radius: 12px; margin-bottom: 12px; border: 1px solid #bfdbfe; text-align: center;'>
+            SECTION: {st.session_state.topic}
             </div>""", 
             unsafe_allow_html=True
         )
@@ -1555,38 +1732,38 @@ def render_exam():
         <html>
         <head>
         <style>
-        body {{ margin: 0; padding: 0; font-family: Inter, 'Segoe UI', sans-serif; background-color: transparent; }}
+        body {{ margin: 0; padding: 0; font-family: Inter, -apple-system, sans-serif; background-color: transparent; }}
         .palette-grid {{
             display: grid;
-            grid-template-columns: repeat(5, minmax(34px, 1fr));
-            gap: 9px;
-            padding: 7px 5px;
+            grid-template-columns: repeat(5, minmax(36px, 1fr));
+            gap: 10px;
+            padding: 8px 4px;
         }}
         .q-btn {{
             aspect-ratio: 1 / 1;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 13px;
+            font-size: 14px;
             font-weight: 750;
             cursor: pointer;
             border-radius: 8px;
             border: 1px solid #cbd5e1;
             user-select: none;
-            transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease;
+            transition: all 0.2s ease;
         }}
-        .q-btn:hover {{ transform: translateY(-2px); box-shadow: 0 5px 10px rgba(15, 23, 42, .13); }}
-        .q-btn:focus-visible {{ outline: 3px solid #2563eb; outline-offset: 2px; }}
+        .q-btn:hover {{ transform: translateY(-2px); box-shadow: 0 4px 8px rgba(15, 23, 42, 0.1); }}
+        .q-btn:focus-visible {{ outline: 3px solid #3b82f6; outline-offset: 2px; }}
         .notvisited {{ background: #ffffff; color: #334155; border-color: #cbd5e1; }}
-        .notanswered {{ background: #e55a45; color: #ffffff; border-color: #e55a45; border-radius: 0 0 12px 12px; }}
+        .notanswered {{ background: #ef4444; color: #ffffff; border-color: #ef4444; border-radius: 0 0 12px 12px; }}
         .answered {{ background: #16a34a; color: #ffffff; border-color: #16a34a; border-radius: 12px 12px 0 0; }}
         .marked {{ background: #7c3aed; color: #ffffff; border-color: #7c3aed; border-radius: 50%; }}
         .answeredmarked {{ background: #7c3aed; color: #ffffff; border-color: #7c3aed; border-radius: 50%; position: relative; overflow: visible; }}
         .answeredmarked::after {{
-            content: ''; position: absolute; bottom: -2px; right: -2px; width: 8px; height: 8px;
-            background-color: #2bc765; border-radius: 50%; border: 1px solid white; z-index: 3;
+            content: ''; position: absolute; bottom: -3px; right: -3px; width: 10px; height: 10px;
+            background-color: #16a34a; border-radius: 50%; border: 2px solid white; z-index: 3;
         }}
-        .current {{ outline: 3px solid #2563eb; outline-offset: 2px; transform: scale(1.04); z-index: 2; box-shadow: 0 0 0 2px #dbeafe; }}
+        .current {{ outline: 3px solid #2563eb; outline-offset: 3px; transform: scale(1.05); z-index: 2; border-color: #2563eb; }}
         </style>
         </head>
         <body>
@@ -1650,7 +1827,7 @@ def render_exam():
         </html>
         """
         
-        components.html(full_html, height=350, scrolling=True)
+        components.html(full_html, height=360, scrolling=True)
 
         st.markdown("<div style='margin-top: 15px;'></div>", unsafe_allow_html=True)
         b1, b2 = st.columns(2)
@@ -1659,12 +1836,18 @@ def render_exam():
         with b2:
             st.button("Instructions", use_container_width=True, key="btn_inst")
             
-        st.button("🚀 Final Submit", type="primary", use_container_width=True, key="btn_sub_right", on_click=nav_submit)
+        st.write("<br>", unsafe_allow_html=True)
+        
+        if st.button("🚀 Final Submit", type="primary", use_container_width=True, key="btn_sub_right"):
+            with st.spinner("Submitting your exam responses..."):
+                time.sleep(0.5)
+                nav_submit()
+                st.rerun()
 
     # ================== LEFT PANEL ==================
     with col_main:
-        st.markdown(f"<p class='exam-kicker'>Live assessment &middot; {st.session_state.topic}</p>", unsafe_allow_html=True)
-        st.progress((q_idx + 1) / total_q, text=f"Question {q_idx + 1} of {total_q}")
+        st.markdown(f"<p class='exam-kicker'>Live Assessment &middot; {st.session_state.topic}</p>", unsafe_allow_html=True)
+        st.progress((q_idx + 1) / total_q, text=f"Question Progress: {q_idx + 1} / {total_q}")
         
         raw_q = q_data['q']
         clean_q = re.sub(r'^[Qq]?(?:uestion)?\s*\d+[\.\)]\s*', '', raw_q)
@@ -1672,7 +1855,7 @@ def render_exam():
         st.markdown(
             f"""
             <section class="question-card">
-                <span class="question-card__number">Question {q_idx + 1} of {total_q}</span>
+                <span class="question-card__number">Question {q_idx + 1}</span>
                 <p class="question-card__text">{clean_q}</p>
             </section>
             """,
@@ -1684,22 +1867,22 @@ def render_exam():
             saved_ans = st.session_state.user_answers.get(q_idx, {})
             
             m_col1, m_col2 = st.columns([1, 1])
-            m_col1.markdown("<div style='color: #475569; font-weight: 700; margin-bottom: 10px;'>Column A (Fixed)</div>", unsafe_allow_html=True)
-            m_col2.markdown("<div style='color: #475569; font-weight: 700; margin-bottom: 10px;'>Column B (Select Match)</div>", unsafe_allow_html=True)
+            m_col1.markdown("<div style='color: #475569; font-weight: 800; font-size: 0.95rem; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 12px; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px;'>Column A (Fixed)</div>", unsafe_allow_html=True)
+            m_col2.markdown("<div style='color: #475569; font-weight: 800; font-size: 0.95rem; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 12px; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px;'>Column B (Select Match)</div>", unsafe_allow_html=True)
             
             for l_item in q_data['left']:
                 r_c1, r_c2 = st.columns([1, 1])
-                r_c1.markdown(f"<div style='padding-top: 8px; font-weight: 500; font-size: 1.1rem;'>{l_item}</div>", unsafe_allow_html=True)
+                r_c1.markdown(f"<div style='padding-top: 10px; font-weight: 600; font-size: 1.15rem; color:#1e293b;'>{l_item}</div>", unsafe_allow_html=True)
                 
                 w_key = f"match_{q_idx}_{l_item}"
-                options = ["-- Select --"] + q_data['options']
-                current_val = saved_ans.get(l_item, "-- Select --")
+                options = ["-- Select Option --"] + q_data['options']
+                current_val = saved_ans.get(l_item, "-- Select Option --")
                 try:
                     idx = options.index(current_val)
                 except ValueError:
                     idx = 0
                 
-                r_c2.selectbox("Match", options, index=idx, key=w_key, on_change=on_match_change, args=(q_idx, q_data['left']), label_visibility="collapsed")
+                r_c2.selectbox("Match Target", options, index=idx, key=w_key, on_change=on_match_change, args=(q_idx, q_data['left']), label_visibility="collapsed")
                 
         else: # Standard MCQ fallback
             saved_ans = st.session_state.user_answers.get(q_idx)
@@ -1720,7 +1903,7 @@ def render_exam():
                 label_visibility="collapsed"
             )
             
-        st.write("<br>", unsafe_allow_html=True)
+        st.write("<br><br>", unsafe_allow_html=True)
         
         b_col1, b_col2, b_col3, b_col4 = st.columns([1.5, 1.5, 2.5, 1.5])
         
@@ -1753,7 +1936,7 @@ def render_result():
 
     render_page_header(
         "Performance Analysis",
-        f"{st.session_state.topic} &middot; Your result is ready for review.",
+        f"{st.session_state.topic} &middot; Your result is completely processed and saved.",
         "Test complete",
     )
 
@@ -1767,22 +1950,24 @@ def render_result():
     with c4:
         render_metric_card("Attempted", f"{attempted} / {total_q}", "amber", f"{unanswered} unattempted")
 
+    st.write("<br>", unsafe_allow_html=True)
+
     c5, c6, c7, c8 = st.columns(4)
     with c5:
-        render_metric_card("Correct", str(correct), "green", "Answers scored correct")
+        render_metric_card("Correct", str(correct), "green", "Answers validated correct")
     with c6:
-        render_metric_card("Incorrect", str(incorrect), "red", "Answers scored incorrect")
+        render_metric_card("Incorrect", str(incorrect), "red", "Answers marked incorrect")
     with c7:
         render_metric_card("Unattempted", str(unanswered), "amber", "Questions left blank")
     with c8:
-        render_metric_card("Negative marks", f"-{negative:.2f}", "red", "Deduction applied")
+        render_metric_card("Negative marks", f"-{negative:.2f}", "red", "Total penalty applied")
 
-    st.write("<br>", unsafe_allow_html=True)
-    st.markdown("### 📋 Detailed Answer Key")
+    st.write("<br><br>", unsafe_allow_html=True)
+    st.markdown("### 📋 Detailed Answer Key Transcript")
     st.write("---")
     
     for i, q in enumerate(st.session_state.questions):
-        st.markdown(f"**Q{i+1}: {q['q']}**")
+        st.markdown(f"<div style='font-size:1.15rem; font-weight:700; color:#1e293b; margin-bottom:8px;'>Q{i+1}: {q['q']}</div>", unsafe_allow_html=True)
         
         # --- FEATURE: DYNAMIC RESULT RENDERING ---
         if q.get('type') == 'match':
@@ -1795,7 +1980,7 @@ def render_result():
                     st.write(f"- **{l}** ➔ {r}")
             elif not user_ans: 
                 st.warning("**Not Attempted.**")
-                st.info("**Correct Answer Matching:**")
+                st.info("**Correct Answer Mapping:**")
                 for l, r in correct_ans.items():
                     st.write(f"- **{l}** ➔ {r}")
             else: 
@@ -1805,7 +1990,7 @@ def render_result():
                     u_r = user_ans.get(l, "Not Selected")
                     st.write(f"- **{l}** ➔ {u_r}")
                     
-                st.info("**Correct Answer Matching:**")
+                st.info("**Correct Answer Mapping:**")
                 for l, r in correct_ans.items():
                     st.write(f"- **{l}** ➔ {r}")
         else:
@@ -1817,15 +2002,17 @@ def render_result():
             elif user_ans is None: 
                 st.warning(f"**Not Attempted.** Correct Answer: {correct_ans}")
             else: 
-                st.error(f"**Your Answer:** {user_ans} (❌ Wrong)")
-                st.info(f"**Correct Answer:** {correct_ans}")
+                st.error(f"**Your Answer:** {user_ans} (❌ Incorrect)")
+                st.info(f"**Correct Answer Engine:** {correct_ans}")
         st.write("---")
         
     st.write("<br>", unsafe_allow_html=True)
-    if st.button("🏠 Back to Dashboard", type="primary"):
-        st.session_state.active_page = "Dashboard"
-        st.session_state.quiz_ready = False
-        st.rerun()
+    if st.button("🏠 Return to Dashboard", type="primary"):
+        with st.spinner("Loading workspace..."):
+            st.session_state.active_page = "Dashboard"
+            st.session_state.quiz_ready = False
+            time.sleep(0.3)
+            st.rerun()
 
 # ==========================================
 # 7. MAIN APPLICATION LOOP
@@ -1846,6 +2033,8 @@ def main():
             render_dashboard()
         elif st.session_state.active_page == "Admin":
             render_admin()
+        elif st.session_state.active_page == "UserQueries":
+            render_user_queries()
         elif st.session_state.active_page == "Instructions":
             render_instructions()
         elif st.session_state.active_page == "Exam":
