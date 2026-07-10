@@ -1467,19 +1467,20 @@ def render_exam():
             act_cols[0].button("Clear Response", on_click=clear_answer, args=(q_idx,), use_container_width=True)
             act_cols[1].button("Unmark" if is_cur_marked else "Mark for Review", on_click=toggle_mark, args=(q_idx,), use_container_width=True)
             act_cols[2].button("Previous", on_click=nav_prev, use_container_width=True)
-            if q_idx == total_q - 1: 
-                if act_cols[3].button("Submit Exam", type="primary", use_container_width=True):
-                    with st.spinner("Submitting responses securely..."):
-                        nav_submit()
-                        st.rerun()
-            else: 
-                act_cols[3].button("Next", type="primary", on_click=nav_next, use_container_width=True)
+            if q_idx == total_q - 1: act_cols[3].button("Submit Exam", type="primary", use_container_width=True, on_click=nav_submit)
+            else: act_cols[3].button("Next", type="primary", on_click=nav_next, use_container_width=True)
 
 def render_result():
+    # FIX: Display Supabase Database Errors if the insertion failed during submission
+    if st.session_state.get('db_save_error'):
+        st.error(f"⚠️ Critical Database Error: Could not save your result. Error details: {st.session_state.db_save_error}")
+        st.warning("Admin Hint: Go to Supabase -> Table Editor -> 'test_results'. Make sure **Row Level Security (RLS)** is Disabled, and all 14 columns exist with exact names/types.")
+        st.session_state.db_save_error = None # Clear error after showing
+
     history = get_supabase_history(st.session_state.current_user)
     
     if not history:
-        st.info("No result data available.")
+        st.info("No result data available. (If you just completed a test and see this, your data was not saved to the cloud).")
         return
         
     idx = st.session_state.get('history_view_index', -1)
