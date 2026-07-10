@@ -680,6 +680,35 @@ def inject_custom_css():
         
         {bg_css}
 
+        /* Streamlit "Manage App" Developer Badge Styling & Repositioning */
+        [class*="viewerBadge_container"], [data-testid="manage-app-button"] {{
+            position: fixed !important;
+            top: 15px !important;
+            left: 15px !important;
+            bottom: auto !important;
+            right: auto !important;
+            transform: scale(0.65) !important;
+            transform-origin: top left !important;
+            opacity: 0.65 !important;
+            background-color: rgba(255, 255, 255, 0.75) !important;
+            border-radius: 8px !important;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1) !important;
+            z-index: 999999 !important;
+            transition: all 0.3s ease !important;
+        }}
+        [class*="viewerBadge_container"]:hover, [data-testid="manage-app-button"]:hover {{
+            opacity: 1 !important;
+            background-color: rgba(255, 255, 255, 1) !important;
+        }}
+        @media (prefers-color-scheme: dark) {{
+            [class*="viewerBadge_container"], [data-testid="manage-app-button"] {{
+                background-color: rgba(15, 23, 42, 0.75) !important;
+            }}
+            [class*="viewerBadge_container"]:hover, [data-testid="manage-app-button"]:hover {{
+                background-color: rgba(15, 23, 42, 1) !important;
+            }}
+        }}
+
         /* Background Readability Enhancements */
         h1, h2, h3, h4, h5, h6, p, span, label, div[data-testid="stMarkdownContainer"], .question-card__text, .question-card__number {{
             text-shadow: 0 2px 6px rgba(0,0,0,0.45);
@@ -1622,8 +1651,8 @@ def render_exam():
         st.markdown(f"<p class='exam-kicker' style='font-weight:700; opacity:0.8;'>Live Assessment &middot; {st.session_state.topic}</p>", unsafe_allow_html=True)
         st.progress((q_idx + 1) / total_q)
         
-        # RESTORED FIXED HEIGHT: This contains the scroll inside the question plate avoiding massive page jumping!
-        with st.container(height=550, border=False):
+        # REMOVED FIXED HEIGHT constraint: Content now perfectly conforms to exactly how large the question and options are natively. 
+        with st.container(border=False):
             raw_q = q_data['q']
             clean_q = re.sub(r'^[Qq]?(?:uestion)?\s*\d+[\.\)]\s*', '', raw_q)
             st.markdown(f"""
@@ -1648,24 +1677,26 @@ def render_exam():
                 saved_ans = st.session_state.user_answers.get(q_idx)
                 idx = q_data['options'].index(saved_ans) if saved_ans in q_data['options'] else None
                 st.radio("Options:", options=q_data['options'], index=idx, key=f"radio_ans_{q_idx}", on_change=on_radio_change, args=(q_idx,), label_visibility="collapsed")
-        
-        st.write("<div style='height:0.5rem;'></div>", unsafe_allow_html=True)
-        is_cur_marked = q_idx in st.session_state.marked_questions
-        
-        # Response / Action Buttons Layout Relocation
-        act_col1, act_col2 = st.columns(2)
-        act_col1.button("🧹 Clear Response", on_click=clear_answer, args=(q_idx,), use_container_width=True)
-        act_col2.button("🚩 Unmark" if is_cur_marked else "🚩 Mark for Review", on_click=toggle_mark, args=(q_idx,), use_container_width=True)
-        
-        st.write("<div style='height:0.25rem;'></div>", unsafe_allow_html=True)
-        
-        # Question Navigation Layout Relocation
-        nav_col1, nav_col2 = st.columns(2)
-        nav_col1.button("⏪ Previous Question", on_click=nav_prev, use_container_width=True)
-        if q_idx == total_q - 1: 
-            nav_col2.button("Finish Test", disabled=True, use_container_width=True)
-        else: 
-            nav_col2.button("Next Question ⏩", type="primary", on_click=nav_next, use_container_width=True)
+
+            # Added clear structural separator that hugs directly beneath the options natively
+            st.markdown("<hr style='margin: 1.25rem 0 1rem 0; border: none; border-top: 1px solid rgba(128, 128, 128, 0.2);'>", unsafe_allow_html=True)
+            
+            is_cur_marked = q_idx in st.session_state.marked_questions
+            
+            # Response / Action Buttons Layout Relocation (Immediately follows options inside natural scroll)
+            act_col1, act_col2 = st.columns(2)
+            act_col1.button("🧹 Clear Response", on_click=clear_answer, args=(q_idx,), use_container_width=True)
+            act_col2.button("🚩 Unmark" if is_cur_marked else "🚩 Mark for Review", on_click=toggle_mark, args=(q_idx,), use_container_width=True)
+            
+            st.write("<div style='height:0.25rem;'></div>", unsafe_allow_html=True)
+            
+            # Question Navigation Layout Relocation
+            nav_col1, nav_col2 = st.columns(2)
+            nav_col1.button("⏪ Previous Question", on_click=nav_prev, use_container_width=True)
+            if q_idx == total_q - 1: 
+                nav_col2.button("Finish Test", disabled=True, use_container_width=True)
+            else: 
+                nav_col2.button("Next Question ⏩", type="primary", on_click=nav_next, use_container_width=True)
 
 def render_result():
     history = load_history().get(st.session_state.current_user, [])
