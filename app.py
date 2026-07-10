@@ -643,16 +643,19 @@ def inject_custom_css():
     try:
         with open('bg.jpg', "rb") as image_file:
             encoded_string = base64.b64encode(image_file.read()).decode()
+            
+            # Adaptive Backgrounds: 
+            # Light Mode uses original brightness, Dark Mode applies a subtle 25% overlay
             bg_css = f"""
             .stApp {{
-                background-image: linear-gradient(rgba(8, 25, 55, 0.35), rgba(8, 25, 55, 0.35)), url(data:image/jpeg;base64,{encoded_string});
+                background-image: url(data:image/jpeg;base64,{encoded_string});
                 background-size: cover;
                 background-position: center;
                 background-attachment: fixed;
             }}
             @media (prefers-color-scheme: dark) {{
                 .stApp {{
-                    background-image: linear-gradient(rgba(0, 0, 0, 0.45), rgba(0, 0, 0, 0.45)), url(data:image/jpeg;base64,{encoded_string});
+                    background-image: linear-gradient(rgba(17, 24, 39, 0.25), rgba(17, 24, 39, 0.25)), url(data:image/jpeg;base64,{encoded_string});
                 }}
             }}
             """
@@ -665,38 +668,6 @@ def inject_custom_css():
         
         {bg_css}
 
-        /* Background Readability Enhancements */
-        h1, h2, h3, h4, h5, h6, p, span, label, div[data-testid="stMarkdownContainer"], .question-card__text, .question-card__number {{
-            text-shadow: 0 2px 6px rgba(0,0,0,0.45);
-        }}
-
-        @media (prefers-color-scheme: light) {{
-            h1, h2, h3, h4, h5, h6, p, label, div[data-testid="stMarkdownContainer"], .question-card__text {{
-                color: #FFFFFF !important;
-            }}
-            span, .page-subtitle, .assessment-meta, .exam-motivation-note, .legend-text, .metric-card p {{
-                color: #E5E7EB !important;
-            }}
-            /* Protect inputs, buttons, and specific UI elements from the global text color override */
-            input, select, textarea, div.stButton > button, div.stButton > button * {{
-                color: var(--text-color) !important;
-                text-shadow: none !important;
-            }}
-            .stAlert * {{
-                text-shadow: none !important;
-            }}
-        }}
-
-        @media (prefers-color-scheme: dark) {{
-            /* Exclude specific interactive UI elements from text-shadow in dark mode */
-            input, select, textarea, div.stButton > button, div.stButton > button * {{
-                text-shadow: none !important;
-            }}
-            .stAlert * {{
-                text-shadow: none !important;
-            }}
-        }}
-
         :root {{
             --sb-primary: {UI_COLORS['primary']};
             --sb-primary-dark: {UI_COLORS['primary_dark']};
@@ -704,87 +675,99 @@ def inject_custom_css():
 
         header[data-testid="stHeader"] {{ background: transparent !important; }}
         
-        /* Relying on Streamlit's native theme variables to automatically handle light/dark mode perfectly */
+        /* =========================================================
+           ADAPTIVE GLASSMORPHISM CARDS (Theme-Specific)
+           ========================================================= */
+        
+        /* Light Mode Defaults */
+        .block-container,
+        div[data-testid="stVerticalBlockBorderWrapper"],
+        .metric-card,
+        .page-header,
+        .edtech-profile-card,
+        .exam-motivation-banner,
+        .legend-box {{
+            background: rgba(255, 255, 255, 0.82) !important;
+            backdrop-filter: blur(12px) !important;
+            -webkit-backdrop-filter: blur(12px) !important;
+            border: 1px solid rgba(255, 255, 255, 0.6) !important;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05) !important;
+            border-radius: 16px;
+            color: var(--text-color);
+        }}
+
+        /* Remove default inner padding/borders causing double-boxing visual issues */
+        div[data-testid="stVerticalBlockBorderWrapper"] {{
+            border-radius: 12px !important;
+            padding: 1.25rem !important;
+        }}
+
+        /* Dark Mode Overrides */
+        @media (prefers-color-scheme: dark) {{
+            .block-container,
+            div[data-testid="stVerticalBlockBorderWrapper"],
+            .metric-card,
+            .page-header,
+            .edtech-profile-card,
+            .exam-motivation-banner,
+            .legend-box {{
+                background: rgba(17, 24, 39, 0.80) !important;
+                border: 1px solid rgba(255, 255, 255, 0.08) !important;
+                box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3) !important;
+            }}
+        }}
+
+        /* =========================================================
+           LAYOUT & COMPONENT SPECIFICS
+           ========================================================= */
+
+        /* Main Layout */
         .block-container {{
             max-width: 1400px !important;
             padding: clamp(1rem, 3vw, 2.5rem) !important;
             margin: 1.5rem auto !important;
             min-height: calc(100vh - 4rem);
-            border: 1px solid rgba(128, 128, 128, 0.2);
-            border-radius: 20px;
-            background-color: var(--background-color) !important;
-            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.15);
             animation: fadeIn 0.4s ease-out forwards;
         }}
         @keyframes fadeIn {{ from {{ opacity: 0; transform: translateY(10px); }} to {{ opacity: 1; transform: translateY(0); }} }}
 
-        /* EdTech Premium Sidebar */
+        /* Sidebar Glassmorphism */
         section[data-testid="stSidebar"] {{ 
-            border-right: 1px solid rgba(128, 128, 128, 0.2); 
-            box-shadow: 2px 0 20px rgba(0,0,0,0.03);
+            background: rgba(255, 255, 255, 0.85) !important;
+            backdrop-filter: blur(12px) !important;
+            -webkit-backdrop-filter: blur(12px) !important;
+            border-right: 1px solid rgba(255, 255, 255, 0.5) !important; 
+            box-shadow: 2px 0 20px rgba(0,0,0,0.05) !important;
+        }}
+        @media (prefers-color-scheme: dark) {{
+            section[data-testid="stSidebar"] {{
+                background: rgba(17, 24, 39, 0.85) !important;
+                border-right: 1px solid rgba(255, 255, 255, 0.08) !important; 
+            }}
         }}
         
-        .edtech-profile-card {{
-            background: var(--secondary-background-color);
-            border: 1px solid rgba(128, 128, 128, 0.2);
-            border-radius: 16px;
-            padding: 1.25rem 1rem;
-            margin: 0.5rem 0 1.5rem 0;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
-        }}
-        .edtech-profile-avatar {{
-            width: 44px; height: 44px;
-            border-radius: 50%;
-            background: linear-gradient(135deg, #4f46e5, #6366f1);
-            color: white !important;
-            display: flex; align-items: center; justify-content: center;
-            font-weight: 800; font-size: 1.1rem;
-            box-shadow: 0 4px 10px rgba(79, 70, 229, 0.3);
-        }}
+        /* Profile Card Fixes */
+        .edtech-profile-card {{ padding: 1.25rem 1rem; margin: 0.5rem 0 1.5rem 0; display: flex; align-items: center; gap: 12px; }}
+        .edtech-profile-avatar {{ width: 44px; height: 44px; border-radius: 50%; background: linear-gradient(135deg, #4f46e5, #6366f1); color: white !important; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 1.1rem; box-shadow: 0 4px 10px rgba(79, 70, 229, 0.3); }}
         .edtech-profile-info strong {{ display: block; font-size: 0.95rem; font-weight: 700; line-height: 1.2; color: var(--text-color); }}
         .edtech-profile-info span {{ display: block; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 2px; color: var(--text-color); opacity: 0.8;}}
 
-        /* Clean general buttons relying on Streamlit's robust default theme colors */
-        div.stButton > button {{
-            min-height: 2.8rem; border-radius: 12px; font-weight: 600; font-size: 0.95rem;
-            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-        }}
-        div.stButton > button:hover:not(:disabled) {{
-            box-shadow: 0 6px 12px -2px rgba(0,0,0,0.05); transform: translateY(-1px);
-        }}
-        div.stButton > button[kind="primary"] {{
-            border: none !important; background: linear-gradient(135deg, var(--sb-primary) 0%, #6366f1 100%) !important;
-            color: #ffffff !important; box-shadow: 0 4px 12px rgba(79, 70, 229, 0.25);
-        }}
+        /* General Buttons */
+        div.stButton > button {{ min-height: 2.8rem; border-radius: 12px; font-weight: 600; font-size: 0.95rem; transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); }}
+        div.stButton > button:hover:not(:disabled) {{ transform: translateY(-1px); }}
+        div.stButton > button[kind="primary"] {{ border: none !important; background: linear-gradient(135deg, var(--sb-primary) 0%, #6366f1 100%) !important; color: #ffffff !important; box-shadow: 0 4px 12px rgba(79, 70, 229, 0.25); }}
         div.stButton > button[kind="primary"] * {{ color: white !important; }}
-        div.stButton > button[kind="primary"]:hover:not(:disabled) {{ 
-            background: linear-gradient(135deg, var(--sb-primary-dark) 0%, #4f46e5 100%) !important;
-            box-shadow: 0 8px 20px rgba(67, 56, 202, 0.38); transform: translateY(-2px); 
-        }}
+        div.stButton > button[kind="primary"]:hover:not(:disabled) {{ background: linear-gradient(135deg, var(--sb-primary-dark) 0%, #4f46e5 100%) !important; box-shadow: 0 8px 20px rgba(67, 56, 202, 0.38); transform: translateY(-2px); }}
 
-        /* Shared page structure */
-        .page-header {{
-            margin: 0 0 2rem;
-            padding: 1.75rem 2rem;
-            border: 1px solid rgba(128, 128, 128, 0.2);
-            border-radius: 16px;
-            background: var(--secondary-background-color);
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
-        }}
+        /* Page Headers */
+        .page-header {{ margin: 0 0 2rem; padding: 1.75rem 2rem; }}
         .page-header h1 {{ margin: 0 !important; color: var(--text-color) !important; font-size: clamp(1.75rem, 3.5vw, 2.5rem) !important; font-weight: 800; }}
         .page-eyebrow {{ margin: 0 0 0.5rem !important; color: var(--sb-primary) !important; font-weight: 700; text-transform: uppercase; }}
         .page-subtitle {{ margin: 0.5rem 0 0 !important; color: var(--text-color) !important; opacity: 0.8; font-size: 1.05rem; }}
         
-        .metric-card {{
-            padding: 1.25rem; border: 1px solid rgba(128, 128, 128, 0.2); border-top: 4px solid var(--metric-accent, #4f46e5);
-            border-radius: 16px; background: var(--secondary-background-color);
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.03);
-            transition: all 0.25s ease;
-        }}
-        .metric-card:hover {{ transform: translateY(-4px); box-shadow: 0 12px 20px -5px rgba(0, 0, 0, 0.08); }}
+        /* Metric Cards */
+        .metric-card {{ padding: 1.25rem; border-top: 4px solid var(--metric-accent, #4f46e5) !important; transition: all 0.25s ease; }}
+        .metric-card:hover {{ transform: translateY(-4px); box-shadow: 0 12px 20px -5px rgba(0, 0, 0, 0.15) !important; }}
         .metric-card span {{ display: block; font-size: 0.8rem; font-weight: 700; text-transform: uppercase; color: var(--text-color) !important; opacity: 0.8; }}
         .metric-card strong {{ display: block; margin-top: 0.4rem; font-size: clamp(1.4rem, 2vw, 1.8rem); font-weight: 800; color: var(--text-color) !important; }}
         .metric-card p {{ margin: 0.5rem 0 0 !important; font-size: 0.85rem; color: var(--text-color) !important; opacity: 0.8; }}
@@ -795,39 +778,29 @@ def inject_custom_css():
         .metric-amber {{ --metric-accent: #f59e0b; }}
         .metric-purple {{ --metric-accent: #8b5cf6; }}
 
-        /* Legend box customized for native theme */
-        .legend-box {{ background: var(--secondary-background-color); padding: 10px; border: 1px solid rgba(128, 128, 128, 0.2); border-radius: 8px; margin: 6px 0; box-shadow: 0 2px 5px -2px rgba(0,0,0,0.05); }}
+        /* Legend */
+        .legend-box {{ padding: 10px; margin: 6px 0; }}
         .legend-title {{ font-weight: 700; color: var(--text-color); font-size: 12px; }}
         .legend-text {{ font-weight: 600; color: var(--text-color); opacity: 0.9; }}
 
-        /* Compact live-assessment controls */
+        /* Palette */
         .palette-title {{ margin: 0 0 0.5rem !important; color: var(--text-color) !important; font-size: 0.9rem; font-weight: 800; text-transform: uppercase; }}
         div[data-testid="stVerticalBlockBorderWrapper"]:has(.palette-title) div.stButton > button {{ min-height: 2.4rem; font-size: 0.9rem; }}
         
-        /* Pre-exam motivational banner */
-        .exam-motivation-banner {{
-            position: relative; overflow: hidden; margin: 0 0 1.5rem;
-            padding: clamp(1.5rem, 3vw, 2.25rem) clamp(1.25rem, 4vw, 3rem);
-            border: 1px solid rgba(128, 128, 128, 0.2); border-radius: 16px;
-            background: var(--secondary-background-color);
-            text-align: center; animation: examBannerFadeIn 0.55s ease-out both;
-        }}
+        /* Banners */
+        .exam-motivation-banner {{ position: relative; overflow: hidden; margin: 0 0 1.5rem; padding: clamp(1.5rem, 3vw, 2.25rem) clamp(1.25rem, 4vw, 3rem); text-align: center; animation: examBannerFadeIn 0.55s ease-out both; }}
         .exam-motivation-content {{ position: relative; z-index: 1; max-width: 760px; margin: 0 auto; }}
         .exam-motivation-banner h2 {{ margin: 0 !important; font-size: clamp(1.35rem, 3vw, 2rem) !important; font-weight: 800; color: var(--text-color) !important; }}
         .exam-motivation-lines {{ display: grid; gap: 0.2rem; margin: 1rem 0 0 !important; font-size: clamp(0.95rem, 2vw, 1.05rem); font-weight: 600; color: var(--text-color) !important; }}
         .exam-motivation-note {{ margin: 1rem 0 0 !important; font-size: 0.95rem; font-weight: 500; color: var(--text-color) !important; opacity: 0.9; }}
         .exam-motivation-closing {{ margin: 0.7rem 0 0 !important; font-size: 0.95rem; font-weight: 700; color: var(--text-color) !important; }}
         .exam-motivation-footer {{ margin: 0.85rem 0 0 !important; font-size: 1.2rem; letter-spacing: 0.18em; }}
-        .exam-banner-emoji {{
-            position: absolute; z-index: 0; font-size: clamp(1.15rem, 2.5vw, 1.6rem); opacity: 0.7;
-            pointer-events: none; animation: examEmojiFloat 4s ease-in-out infinite;
-        }}
+        .exam-banner-emoji {{ position: absolute; z-index: 0; font-size: clamp(1.15rem, 2.5vw, 1.6rem); opacity: 0.7; pointer-events: none; animation: examEmojiFloat 4s ease-in-out infinite; }}
         .exam-banner-emoji-left {{ top: 17%; left: 5%; }}
         .exam-banner-emoji-right {{ right: 5%; bottom: 16%; animation-delay: -1.7s; }}
-        @keyframes examBannerFadeIn {{ from {{ opacity: 0; transform: translateY(10px); }} to {{ opacity: 1; transform: translateY(0); }} }}
         @keyframes examEmojiFloat {{ 0%, 100% {{ transform: translateY(0); }} 50% {{ transform: translateY(-6px); }} }}
         
-        /* Result Top Colored Cards */
+        /* Result Highlights */
         .res-correct {{ border-top-color: #16a34a !important; }}
         .res-incorrect {{ border-top-color: #dc2626 !important; }}
         .res-unanswered {{ border-top-color: #d97706 !important; }}
@@ -847,15 +820,16 @@ def render_visual_timer():
             .timer-box {{
                 box-sizing: border-box; min-height: 38px; padding: 5px 8px;
                 border: 1px solid #fecaca; border-radius: 8px;
-                background: linear-gradient(135deg, #fff5f5, #fff1f2);
+                background: rgba(255, 241, 242, 0.75);
+                backdrop-filter: blur(4px);
                 color: #e11d48; font-size: 16px; font-weight: 800; text-align: center;
                 display: flex; align-items: center; justify-content: center; gap: 8px;
                 box-shadow: 0 2px 5px rgba(225, 29, 72, 0.05);
             }}
-            .no-timer {{ background: #f0f9ff; border-color: #bae6fd; color: #0284c7; font-size: 14px; }}
+            .no-timer {{ background: rgba(240, 249, 255, 0.75); border-color: #bae6fd; color: #0284c7; font-size: 14px; }}
             @media (prefers-color-scheme: dark) {{
-                .timer-box {{ background: linear-gradient(135deg, #4c1d95, #312e81); border-color: #4338ca; color: #f8fafc; }}
-                .no-timer {{ background: #0f172a; border-color: #1e293b; color: #38bdf8; }}
+                .timer-box {{ background: rgba(76, 29, 149, 0.6); border-color: rgba(67, 56, 202, 0.5); color: #f8fafc; }}
+                .no-timer {{ background: rgba(15, 23, 42, 0.6); border-color: rgba(30, 41, 59, 0.5); color: #38bdf8; }}
             }}
         </style>
     </head>
