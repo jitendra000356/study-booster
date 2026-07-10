@@ -254,7 +254,7 @@ def get_attempt_data(user, test_file):
         if res.data: 
             return {'allowed': res.data[0]['allowed'], 'used': res.data[0]['used']}
     except: pass
-    return {'allowed': 2, 'used': 0}
+    return {'allowed': 5, 'used': 0}
 
 def increment_attempt(user, test_file):
     curr = get_attempt_data(user, test_file)
@@ -788,27 +788,39 @@ def render_sidebar():
     role = "Administrator" if is_admin else "Learner"
     st.sidebar.markdown(f"<div class='edtech-profile-card'><div class='edtech-profile-avatar'>{user_initial}</div><div class='edtech-profile-info'><strong>{st.session_state.current_user.split()[0]}</strong><span>{role}</span></div></div>", unsafe_allow_html=True)
     
+    def safe_navigate(target_page, dashboard_tab=None):
+        if st.session_state.get('active_page') == 'Exam' and not st.session_state.get('is_paused', False):
+            st.sidebar.error("An assessment is currently in progress. Please Submit or Pause the assessment before leaving this page.")
+        else:
+            st.session_state.active_page = target_page
+            if dashboard_tab:
+                st.session_state.dashboard_tab = dashboard_tab
+            st.rerun()
+
     if is_admin:
-        if st.sidebar.button("⚙️ Admin Control Panel", use_container_width=True): st.session_state.active_page = "Admin"; st.rerun()
-        if st.sidebar.button("💬 User Queries", use_container_width=True): st.session_state.active_page = "UserQueries"; st.rerun()
+        if st.sidebar.button("⚙️ Admin Control Panel", use_container_width=True): safe_navigate("Admin")
+        if st.sidebar.button("💬 User Queries", use_container_width=True): safe_navigate("UserQueries")
         st.sidebar.divider()
             
-    if st.sidebar.button("📚 Dashboard", use_container_width=True): st.session_state.active_page = "Dashboard"; st.session_state.dashboard_tab = "Practice"; st.rerun()
-    if st.sidebar.button("📈 Performance", use_container_width=True): st.session_state.active_page = "Dashboard"; st.session_state.dashboard_tab = "Performance"; st.rerun()
-    if st.sidebar.button("💬 Ask Query", use_container_width=True): st.session_state.active_page = "Dashboard"; st.session_state.dashboard_tab = "Ask Query"; st.rerun()
+    if st.sidebar.button("📚 Dashboard", use_container_width=True): safe_navigate("Dashboard", "Practice")
+    if st.sidebar.button("📈 Performance", use_container_width=True): safe_navigate("Dashboard", "Performance")
+    if st.sidebar.button("💬 Ask Query", use_container_width=True): safe_navigate("Dashboard", "Ask Query")
         
     st.sidebar.divider()
     if st.sidebar.button("🚪 Logout", type="secondary", use_container_width=True):
-        with st.spinner("Logging out safely..."):
-            if st.session_state.get("sid"):
-                session_path = os.path.join(SESSION_FOLDER, f"{st.session_state.sid}.pkl")
-                if os.path.exists(session_path):
-                    try: os.remove(session_path)
-                    except: pass
-            if "sid" in st.query_params: del st.query_params["sid"]
-            for key in list(st.session_state.keys()): del st.session_state[key]
-            time.sleep(0.4)
-            st.rerun()
+        if st.session_state.get('active_page') == 'Exam' and not st.session_state.get('is_paused', False):
+            st.sidebar.error("An assessment is currently in progress. Please Submit or Pause the assessment before leaving this page.")
+        else:
+            with st.spinner("Logging out safely..."):
+                if st.session_state.get("sid"):
+                    session_path = os.path.join(SESSION_FOLDER, f"{st.session_state.sid}.pkl")
+                    if os.path.exists(session_path):
+                        try: os.remove(session_path)
+                        except: pass
+                if "sid" in st.query_params: del st.query_params["sid"]
+                for key in list(st.session_state.keys()): del st.session_state[key]
+                time.sleep(0.4)
+                st.rerun()
 
 def render_user_queries():
     if "Admin" not in st.session_state.current_user: st.error("Unauthorized!"); return
@@ -939,29 +951,42 @@ def render_admin():
         st.markdown("#### Folders")
         for folder in subfolders:
             with st.container(border=True):
-                fc1, fc2, fc3, fc4 = st.columns([3, 4, 2, 2])
-                fc1.button(f"📁 {folder}", key=f"nav_{current_path}_{folder}", on_click=nav_admin_down, args=(f"{folder}" if current_path=='Root' else f"{current_path}/{folder}",), use_container_width=True)
+                edit_key = f"edit_folder_{current_path}_{folder}"
+                is_editing = st.session_state.get('editing_item') == edit_key
                 
-                new_fn = fc2.text_input("Rename", value=folder, key=f"ren_fld_{current_path}_{folder}", label_visibility="collapsed")
-                if fc3.button("✏️ Rename", key=f"rn_btn_{current_path}_{folder}", use_container_width=True):
-                    if new_fn and new_fn.strip() != folder:
+                if is_editing:
+                    st.markdown(f"📁 **{folder}**")
+                    ec1, ec2, ec3 = st.columns([8, 2, 2])
+                    new_fn = ec1.text_input("New Name", value=folder, key=f"in_{edit_key}", label_visibility="collapsed")
+                    if ec2.button("Save", key=f"save_{edit_key}", type="primary", use_container_width=True):
+                        if new_fn and new_fn.strip() != folder:
+                            old_prefix = folder if current_path == 'Root' else f"{current_path}/{folder}"
+                            new_prefix = new_fn.strip() if current_path == 'Root' else f"{current_path}/{new_fn.strip()}"
+                            for r in records:
+                                rfp = r['folder_path']
+                                if rfp == old_prefix:
+                                    supabase.table('question_banks').update({'folder_path': new_prefix}).eq('id', r['id']).execute()
+                                elif rfp.startswith(old_prefix + '/'):
+                                    new_fp = rfp.replace(old_prefix, new_prefix, 1)
+                                    supabase.table('question_banks').update({'folder_path': new_fp}).eq('id', r['id']).execute()
+                        st.session_state.editing_item = None
+                        st.rerun()
+                    if ec3.button("Cancel", key=f"cancel_{edit_key}", use_container_width=True):
+                        st.session_state.editing_item = None
+                        st.rerun()
+                else:
+                    fc1, fc2, fc3 = st.columns([8, 2, 2])
+                    fc1.button(f"📁 {folder}", key=f"nav_{current_path}_{folder}", on_click=nav_admin_down, args=(f"{folder}" if current_path=='Root' else f"{current_path}/{folder}",), use_container_width=True)
+                    if fc2.button("Rename", key=f"rn_btn_{current_path}_{folder}", use_container_width=True):
+                        st.session_state.editing_item = edit_key
+                        st.rerun()
+                    if fc3.button("Delete", key=f"del_f_{current_path}_{folder}", use_container_width=True):
                         old_prefix = folder if current_path == 'Root' else f"{current_path}/{folder}"
-                        new_prefix = new_fn.strip() if current_path == 'Root' else f"{current_path}/{new_fn.strip()}"
                         for r in records:
                             rfp = r['folder_path']
-                            if rfp == old_prefix:
-                                supabase.table('question_banks').update({'folder_path': new_prefix}).eq('id', r['id']).execute()
-                            elif rfp.startswith(old_prefix + '/'):
-                                new_fp = rfp.replace(old_prefix, new_prefix, 1)
-                                supabase.table('question_banks').update({'folder_path': new_fp}).eq('id', r['id']).execute()
+                            if rfp == old_prefix or rfp.startswith(old_prefix + '/'):
+                                supabase.table('question_banks').delete().eq('id', r['id']).execute()
                         st.rerun()
-                if fc4.button("🗑️ Delete", key=f"del_f_{current_path}_{folder}", use_container_width=True):
-                    old_prefix = folder if current_path == 'Root' else f"{current_path}/{folder}"
-                    for r in records:
-                        rfp = r['folder_path']
-                        if rfp == old_prefix or rfp.startswith(old_prefix + '/'):
-                            supabase.table('question_banks').delete().eq('id', r['id']).execute()
-                    st.rerun()
                         
         st.write("---")
         c_ah1, c_ah2 = st.columns([6, 4])
@@ -981,26 +1006,39 @@ def render_admin():
             file_size_kb = len(f_data['csv_data'].encode('utf-8')) / 1024
             
             with st.container(border=True):
+                edit_key = f"edit_file_{file_id}"
+                is_editing = st.session_state.get('editing_item') == edit_key
+                
                 c1, c2 = st.columns([8, 2])
                 c1.markdown(f"📄 **{f_name}**")
                 c2.markdown(f"<span style='opacity:0.8;'>{file_size_kb:.1f} KB</span>", unsafe_allow_html=True)
-                mc1, mc2, mc3, mc4 = st.columns([3, 4, 2, 2])
                 
-                tgt = mc1.selectbox("Move", ["-- Select --"] + all_folders, key=f"mov_{file_id}", label_visibility="collapsed")
-                if tgt != "-- Select --":
-                    supabase.table('question_banks').update({'folder_path': tgt}).eq('id', file_id).execute()
-                    st.rerun()
-                
-                new_fn = mc2.text_input("Rename", value=f_name, key=f"ren_f_{file_id}", label_visibility="collapsed")
-                if mc3.button("✏️ Rename", key=f"rn_fbtn_{file_id}", use_container_width=True):
-                    if new_fn and new_fn.strip() != f_name:
-                        cn = new_fn.strip() if new_fn.strip().endswith('.csv') else new_fn.strip() + '.csv'
-                        supabase.table('question_banks').update({'file_name': cn}).eq('id', file_id).execute()
+                if is_editing:
+                    ec1, ec2, ec3 = st.columns([8, 2, 2])
+                    new_fn = ec1.text_input("New Name", value=f_name, key=f"in_{edit_key}", label_visibility="collapsed")
+                    if ec2.button("Save", key=f"save_{edit_key}", type="primary", use_container_width=True):
+                        if new_fn and new_fn.strip() != f_name:
+                            cn = new_fn.strip() if new_fn.strip().endswith('.csv') else new_fn.strip() + '.csv'
+                            supabase.table('question_banks').update({'file_name': cn}).eq('id', file_id).execute()
+                        st.session_state.editing_item = None
                         st.rerun()
-                
-                if mc4.button("🗑️ Delete", key=f"del_{file_id}", use_container_width=True):
-                    supabase.table('question_banks').delete().eq('id', file_id).execute()
-                    st.rerun()
+                    if ec3.button("Cancel", key=f"cancel_{edit_key}", use_container_width=True):
+                        st.session_state.editing_item = None
+                        st.rerun()
+                else:
+                    mc1, mc2, mc3 = st.columns([6, 3, 3])
+                    tgt = mc1.selectbox("Move", ["-- Move to Folder --"] + all_folders, key=f"mov_{file_id}", label_visibility="collapsed")
+                    if tgt != "-- Move to Folder --":
+                        supabase.table('question_banks').update({'folder_path': tgt}).eq('id', file_id).execute()
+                        st.rerun()
+                    
+                    if mc2.button("Rename", key=f"rn_btn_{file_id}", use_container_width=True):
+                        st.session_state.editing_item = edit_key
+                        st.rerun()
+                    
+                    if mc3.button("Delete", key=f"del_{file_id}", use_container_width=True):
+                        supabase.table('question_banks').delete().eq('id', file_id).execute()
+                        st.rerun()
 
     with st.expander("⚖️ Scoring & Penalty Configuration", expanded=False):
         if admin_file_options:
@@ -1297,7 +1335,7 @@ def render_instructions():
         with st.container(border=True):
             st.markdown("### Assessment Guidelines")
             att_data = get_attempt_data(st.session_state.current_user, st.session_state.current_test_filename)
-            used = att_data.get('used', 0); allowed = att_data.get('allowed', 2); curr_att = used + 1
+            used = att_data.get('used', 0); allowed = att_data.get('allowed', 5); curr_att = used + 1
             if allowed >= 99: st.markdown(f"🔹 **Attempt Number:** Attempt {curr_att} (Unlimited Attempts)")
             else: st.markdown(f"🔹 **Attempt Number:** Attempt {curr_att} of {allowed}")
             st.markdown(f"🔹 **Total Questions:** {len(st.session_state.questions)}")
