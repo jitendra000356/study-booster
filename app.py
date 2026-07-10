@@ -1428,7 +1428,8 @@ def render_exam():
         st.write("<br>", unsafe_allow_html=True)
         if st.button("🚀 Final Submit", type="primary", use_container_width=True):
             with st.spinner("Submitting responses securely..."):
-                time.sleep(0.5); nav_submit(); st.rerun()
+                nav_submit()
+                st.rerun()
 
     with col_main:
         st.markdown(f"<p class='exam-kicker' style='font-weight:700; opacity:0.8;'>Live Assessment &middot; {st.session_state.topic}</p>", unsafe_allow_html=True)
@@ -1466,8 +1467,13 @@ def render_exam():
             act_cols[0].button("Clear Response", on_click=clear_answer, args=(q_idx,), use_container_width=True)
             act_cols[1].button("Unmark" if is_cur_marked else "Mark for Review", on_click=toggle_mark, args=(q_idx,), use_container_width=True)
             act_cols[2].button("Previous", on_click=nav_prev, use_container_width=True)
-            if q_idx == total_q - 1: act_cols[3].button("Finish", disabled=True, use_container_width=True)
-            else: act_cols[3].button("Next", type="primary", on_click=nav_next, use_container_width=True)
+            if q_idx == total_q - 1: 
+                if act_cols[3].button("Submit Exam", type="primary", use_container_width=True):
+                    with st.spinner("Submitting responses securely..."):
+                        nav_submit()
+                        st.rerun()
+            else: 
+                act_cols[3].button("Next", type="primary", on_click=nav_next, use_container_width=True)
 
 def render_result():
     history = get_supabase_history(st.session_state.current_user)
