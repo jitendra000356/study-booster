@@ -642,13 +642,18 @@ def render_metric_card(label, value, accent="blue", helper_text=None):
 def inject_custom_css():
     try:
         with open('bg.jpg', "rb") as image_file:
-            encoded_string = base64.b64encode(image_file.read())
+            encoded_string = base64.b64encode(image_file.read()).decode()
             bg_css = f"""
             .stApp {{
-                background-image: url(data:image/jpeg;base64,{encoded_string.decode()});
+                background-image: linear-gradient(rgba(8, 25, 55, 0.35), rgba(8, 25, 55, 0.35)), url(data:image/jpeg;base64,{encoded_string});
                 background-size: cover;
                 background-position: center;
                 background-attachment: fixed;
+            }}
+            @media (prefers-color-scheme: dark) {{
+                .stApp {{
+                    background-image: linear-gradient(rgba(0, 0, 0, 0.45), rgba(0, 0, 0, 0.45)), url(data:image/jpeg;base64,{encoded_string});
+                }}
             }}
             """
     except Exception:
@@ -659,6 +664,38 @@ def inject_custom_css():
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
         
         {bg_css}
+
+        /* Background Readability Enhancements */
+        h1, h2, h3, h4, h5, h6, p, span, label, div[data-testid="stMarkdownContainer"], .question-card__text, .question-card__number {{
+            text-shadow: 0 2px 6px rgba(0,0,0,0.45);
+        }}
+
+        @media (prefers-color-scheme: light) {{
+            h1, h2, h3, h4, h5, h6, p, label, div[data-testid="stMarkdownContainer"], .question-card__text {{
+                color: #FFFFFF !important;
+            }}
+            span, .page-subtitle, .assessment-meta, .exam-motivation-note, .legend-text, .metric-card p {{
+                color: #E5E7EB !important;
+            }}
+            /* Protect inputs, buttons, and specific UI elements from the global text color override */
+            input, select, textarea, div.stButton > button, div.stButton > button * {{
+                color: var(--text-color) !important;
+                text-shadow: none !important;
+            }}
+            .stAlert * {{
+                text-shadow: none !important;
+            }}
+        }}
+
+        @media (prefers-color-scheme: dark) {{
+            /* Exclude specific interactive UI elements from text-shadow in dark mode */
+            input, select, textarea, div.stButton > button, div.stButton > button * {{
+                text-shadow: none !important;
+            }}
+            .stAlert * {{
+                text-shadow: none !important;
+            }}
+        }}
 
         :root {{
             --sb-primary: {UI_COLORS['primary']};
