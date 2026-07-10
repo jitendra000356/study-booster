@@ -680,6 +680,13 @@ def inject_custom_css():
         
         {bg_css}
 
+        /* Lite Mode Optimizations - Hardware anti-aliasing for totally crisp text */
+        *, html, body {{
+            -webkit-font-smoothing: antialiased !important;
+            -moz-osx-font-smoothing: grayscale !important;
+            text-rendering: optimizeLegibility !important;
+        }}
+
         /* Streamlit "Manage App" Developer Badge Styling & Repositioning */
         [class*="viewerBadge_container"], [data-testid="manage-app-button"] {{
             position: fixed !important;
@@ -687,14 +694,14 @@ def inject_custom_css():
             left: 15px !important;
             bottom: auto !important;
             right: auto !important;
-            transform: scale(0.65) !important;
+            transform: scale(0.65) translateZ(0) !important;
             transform-origin: top left !important;
             opacity: 0.65 !important;
-            background-color: rgba(255, 255, 255, 0.75) !important;
+            background-color: rgba(255, 255, 255, 0.85) !important;
             border-radius: 8px !important;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1) !important;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1) !important;
             z-index: 999999 !important;
-            transition: all 0.3s ease !important;
+            transition: opacity 0.2s ease !important;
         }}
         [class*="viewerBadge_container"]:hover, [data-testid="manage-app-button"]:hover {{
             opacity: 1 !important;
@@ -702,16 +709,41 @@ def inject_custom_css():
         }}
         @media (prefers-color-scheme: dark) {{
             [class*="viewerBadge_container"], [data-testid="manage-app-button"] {{
-                background-color: rgba(15, 23, 42, 0.75) !important;
+                background-color: rgba(15, 23, 42, 0.85) !important;
             }}
             [class*="viewerBadge_container"]:hover, [data-testid="manage-app-button"]:hover {{
                 background-color: rgba(15, 23, 42, 1) !important;
             }}
         }}
 
+        /* Responsive 2x2 wrapping logic for strictly 4-column UI blocks (like metric cards & action buttons) */
+        @media (max-width: 640px) {{
+            div[data-testid="stHorizontalBlock"]:has(> div[data-testid="column"]:nth-child(4)) {{
+                flex-wrap: wrap !important;
+                flex-direction: row !important;
+                gap: 0.5rem !important;
+            }}
+            div[data-testid="stHorizontalBlock"]:has(> div[data-testid="column"]:nth-child(4)) > div[data-testid="column"] {{
+                min-width: calc(50% - 0.5rem) !important;
+                flex: 1 1 calc(50% - 0.5rem) !important;
+                width: calc(50% - 0.5rem) !important;
+            }}
+        }}
+
         /* Background Readability Enhancements */
         h1, h2, h3, h4, h5, h6, p, span, label, div[data-testid="stMarkdownContainer"], .question-card__text, .question-card__number {{
             text-shadow: 0 2px 6px rgba(0,0,0,0.45);
+        }}
+
+        /* Strip ALL text-shadows and box-shadows on mobile to prevent any blurriness */
+        @media (max-width: 768px) {{
+            h1, h2, h3, h4, h5, h6, p, span, label, div[data-testid="stMarkdownContainer"], .question-card__text, .question-card__number {{
+                text-shadow: none !important;
+            }}
+            div[data-testid="stContainer"], .metric-card, .edtech-profile-card, .page-header {{
+                box-shadow: none !important; 
+                border: 1px solid var(--border) !important;
+            }}
         }}
 
         @media (prefers-color-scheme: light) {{
@@ -748,7 +780,6 @@ def inject_custom_css():
 
         header[data-testid="stHeader"] {{ background: transparent !important; }}
         
-        /* Relying on Streamlit's native theme variables to automatically handle light/dark mode perfectly */
         .block-container {{
             max-width: 1400px !important;
             padding: clamp(1rem, 3vw, 2.5rem) !important;
@@ -791,22 +822,27 @@ def inject_custom_css():
         .edtech-profile-info strong {{ display: block; font-size: 0.95rem; font-weight: 700; line-height: 1.2; color: var(--text-color); }}
         .edtech-profile-info span {{ display: block; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 2px; color: var(--text-color); opacity: 0.8;}}
 
-        /* Clean general buttons relying on Streamlit's robust default theme colors */
+        /* Compact, solid, blur-free modern buttons */
         div.stButton > button {{
-            min-height: 2.8rem; border-radius: 12px; font-weight: 600; font-size: 0.95rem;
-            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            min-height: 2.2rem !important; 
+            border-radius: 6px !important; 
+            font-weight: 600 !important; 
+            font-size: 0.85rem !important;
+            padding: 0.25rem 0.5rem !important;
+            transition: opacity 0.15s ease !important;
+            transform: translateZ(0) !important;
+            box-shadow: none !important; 
         }}
         div.stButton > button:hover:not(:disabled) {{
-            box-shadow: 0 6px 12px -2px rgba(0,0,0,0.05); transform: translateY(-1px);
+            opacity: 0.85 !important;
         }}
         div.stButton > button[kind="primary"] {{
-            border: none !important; background: linear-gradient(135deg, var(--sb-primary) 0%, #6366f1 100%) !important;
-            color: #ffffff !important; box-shadow: 0 4px 12px rgba(79, 70, 229, 0.25);
+            border: none !important; 
+            background: var(--sb-primary) !important;
+            color: #ffffff !important; 
         }}
-        div.stButton > button[kind="primary"] * {{ color: white !important; }}
         div.stButton > button[kind="primary"]:hover:not(:disabled) {{ 
-            background: linear-gradient(135deg, var(--sb-primary-dark) 0%, #4f46e5 100%) !important;
-            box-shadow: 0 8px 20px rgba(67, 56, 202, 0.38); transform: translateY(-2px); 
+            background: var(--sb-primary-dark) !important;
         }}
 
         /* Shared page structure */
@@ -828,7 +864,6 @@ def inject_custom_css():
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.03);
             transition: all 0.25s ease;
         }}
-        .metric-card:hover {{ transform: translateY(-4px); box-shadow: 0 12px 20px -5px rgba(0, 0, 0, 0.08); }}
         .metric-card span {{ display: block; font-size: 0.8rem; font-weight: 700; text-transform: uppercase; color: var(--text-color) !important; opacity: 0.8; }}
         .metric-card strong {{ display: block; margin-top: 0.4rem; font-size: clamp(1.4rem, 2vw, 1.8rem); font-weight: 800; color: var(--text-color) !important; }}
         .metric-card p {{ margin: 0.5rem 0 0 !important; font-size: 0.85rem; color: var(--text-color) !important; opacity: 0.8; }}
@@ -840,13 +875,13 @@ def inject_custom_css():
         .metric-purple {{ --metric-accent: #8b5cf6; }}
 
         /* Legend box customized for native theme */
-        .legend-box {{ background: var(--secondary-background-color); border: 1px solid rgba(128, 128, 128, 0.2); border-radius: 8px; box-shadow: 0 2px 5px -2px rgba(0,0,0,0.05); }}
-        .legend-title {{ font-weight: 700; color: var(--text-color); }}
+        .legend-box {{ background: var(--secondary-background-color); padding: 10px; border: 1px solid rgba(128, 128, 128, 0.2); border-radius: 8px; margin: 6px 0; box-shadow: 0 2px 5px -2px rgba(0,0,0,0.05); }}
+        .legend-title {{ font-weight: 700; color: var(--text-color); font-size: 12px; }}
         .legend-text {{ font-weight: 600; color: var(--text-color); opacity: 0.9; }}
 
-        /* Feature 2: Compact live-assessment controls */
-        .palette-title {{ margin: 0 0 0.2rem !important; color: var(--text-color) !important; font-size: 0.85rem; font-weight: 800; text-transform: uppercase; }}
-        div[data-testid="stVerticalBlockBorderWrapper"]:has(.palette-title) div.stButton > button {{ min-height: 2.2rem; font-size: 0.85rem; padding: 0.25rem 0.5rem; }}
+        /* Compact live-assessment controls */
+        .palette-title {{ margin: 0 0 0.5rem !important; color: var(--text-color) !important; font-size: 0.9rem; font-weight: 800; text-transform: uppercase; }}
+        div[data-testid="stVerticalBlockBorderWrapper"]:has(.palette-title) div.stButton > button {{ min-height: 2.2rem; font-size: 0.85rem; }}
         
         /* Pre-exam motivational banner */
         .exam-motivation-banner {{
@@ -878,7 +913,6 @@ def inject_custom_css():
         </style>
     """, unsafe_allow_html=True)
 
-# Feature 2: Compact visual timer adjustment
 def render_visual_timer():
     is_timed = (st.session_state.timer_mode == "Total Time (Minutes)")
     rem_sec = int(max(0, st.session_state.remaining_seconds))
@@ -890,14 +924,14 @@ def render_visual_timer():
         <style>
             body {{ margin:0; padding:0; font-family: Inter, sans-serif; background: transparent; }}
             .timer-box {{
-                box-sizing: border-box; min-height: 34px; padding: 4px 6px;
-                border: 1px solid #fecaca; border-radius: 6px;
+                box-sizing: border-box; min-height: 38px; padding: 5px 8px;
+                border: 1px solid #fecaca; border-radius: 8px;
                 background: linear-gradient(135deg, #fff5f5, #fff1f2);
-                color: #e11d48; font-size: 14px; font-weight: 800; text-align: center;
-                display: flex; align-items: center; justify-content: center; gap: 4px;
-                box-shadow: 0 1px 3px rgba(225, 29, 72, 0.05);
+                color: #e11d48; font-size: 16px; font-weight: 800; text-align: center;
+                display: flex; align-items: center; justify-content: center; gap: 8px;
+                box-shadow: 0 2px 5px rgba(225, 29, 72, 0.05);
             }}
-            .no-timer {{ background: #f0f9ff; border-color: #bae6fd; color: #0284c7; font-size: 12px; }}
+            .no-timer {{ background: #f0f9ff; border-color: #bae6fd; color: #0284c7; font-size: 14px; }}
             @media (prefers-color-scheme: dark) {{
                 .timer-box {{ background: linear-gradient(135deg, #4c1d95, #312e81); border-color: #4338ca; color: #f8fafc; }}
                 .no-timer {{ background: #0f172a; border-color: #1e293b; color: #38bdf8; }}
@@ -913,7 +947,7 @@ def render_visual_timer():
             var rem = {rem_sec};
             var display = document.getElementById("time");
             
-            if (!is_timed) {{ display.innerHTML = "Practice Mode"; }} 
+            if (!is_timed) {{ display.innerHTML = "Practice Mode - No Limit"; }} 
             else {{
                 function updateDisplay() {{
                     if (rem <= 0) {{ display.innerHTML = "TIME UP!"; return false; }}
@@ -928,7 +962,7 @@ def render_visual_timer():
     </body>
     </html>
     """
-    components.html(html_code, height=38)
+    components.html(html_code, height=45)
 
 # ==========================================
 # 6. PAGE RENDERING FUNCTIONS
@@ -1552,34 +1586,28 @@ def render_exam():
             
     with col_pal:
         with st.container(border=True):
-            # Feature 2: Compact & Aligned Exam Controls
-            st.markdown("<p class='palette-title' style='margin-bottom:0.25rem !important; font-size: 0.85rem;'>Controls & Timer</p>", unsafe_allow_html=True)
-            
-            c_tmr, c_ps = st.columns([1.4, 1])
-            with c_tmr:
-                render_visual_timer()
-            with c_ps:
-                st.button("⏸ Pause", type="secondary", on_click=pause_exam, use_container_width=True)
+            st.markdown("<p class='palette-title'>Exam Controls & Timer</p>", unsafe_allow_html=True)
+            render_visual_timer()
+            st.write("<div style='margin-top:6px;'></div>", unsafe_allow_html=True)
+            st.button("⏸ Pause Exam", type="secondary", on_click=pause_exam, use_container_width=True)
             
             udisp = st.session_state.current_user.split()[0]
-            # Feature 2: Reduced font size & tighter padding
             html_legend = f"""
-            <div class="legend-box" style="padding: 8px; margin: 4px 0;">
-                <div style="display:flex; align-items:center; gap:6px; margin-bottom:8px;">
-                    <div style="width:20px; height:20px; background:linear-gradient(135deg, #4f46e5, #6366f1); color:white; border-radius:50%; display:flex; justify-content:center; align-items:center; font-weight:bold; font-size:10px;">{udisp[0].upper()}</div>
-                    <span class="legend-title" style="font-size:11px;">{udisp}'s Session</span>
+            <div class="legend-box">
+                <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px;">
+                    <div style="width:24px; height:24px; background:linear-gradient(135deg, #4f46e5, #6366f1); color:white; border-radius:50%; display:flex; justify-content:center; align-items:center; font-weight:bold; font-size:11px;">{udisp[0].upper()}</div>
+                    <span class="legend-title">{udisp}'s Session</span>
                 </div>
-                <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px 4px; font-size:10px;">
-                    <div style="display:flex; align-items:center; gap:4px;"><div style="width:12px; height:12px; background:#16a34a; border: 1px solid #16a34a; border-radius:3px; display:flex; align-items:center; justify-content:center;"></div><span class="legend-text">Answered</span></div>
-                    <div style="display:flex; align-items:center; gap:4px;"><div style="width:12px; height:12px; background:#7c3aed; border: 1px solid #7c3aed; border-radius:3px; display:flex; align-items:center; justify-content:center;"></div><span class="legend-text">Marked</span></div>
-                    <div style="display:flex; align-items:center; gap:4px;"><div style="width:12px; height:12px; background:transparent; border:1px solid #cbd5e1; border-radius:3px; display:flex; align-items:center; justify-content:center;"></div><span class="legend-text">Not Visited</span></div>
-                    <div style="display:flex; align-items:center; gap:4px;"><div style="width:12px; height:12px; background:#ef4444; border: 1px solid #ef4444; border-radius:3px; display:flex; align-items:center; justify-content:center;"></div><span class="legend-text">Not Ans</span></div>
-                    <div style="display:flex; align-items:center; gap:4px; grid-column:span 2;"><div style="width:12px; height:12px; background:#7c3aed; border: 1px solid #7c3aed; border-radius:3px; position:relative;"><div style="position:absolute; bottom:-3px; right:-3px; width:6px; height:6px; background:#16a34a; border-radius:50%; border:1px solid white;"></div></div><span class="legend-text" style="margin-left: 2px;">Marked and Answered</span></div>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px 4px; font-size:10px;">
+                    <div style="display:flex; align-items:center; gap:4px;"><div style="width:14px; height:14px; background:#16a34a; border: 1px solid #16a34a; border-radius:4px; display:flex; align-items:center; justify-content:center;"></div><span class="legend-text">Answered</span></div>
+                    <div style="display:flex; align-items:center; gap:4px;"><div style="width:14px; height:14px; background:#7c3aed; border: 1px solid #7c3aed; border-radius:4px; display:flex; align-items:center; justify-content:center;"></div><span class="legend-text">Marked</span></div>
+                    <div style="display:flex; align-items:center; gap:4px;"><div style="width:14px; height:14px; background:transparent; border:1px solid #cbd5e1; border-radius:4px; display:flex; align-items:center; justify-content:center;"></div><span class="legend-text">Not Visited</span></div>
+                    <div style="display:flex; align-items:center; gap:4px;"><div style="width:14px; height:14px; background:#ef4444; border: 1px solid #ef4444; border-radius:4px; display:flex; align-items:center; justify-content:center;"></div><span class="legend-text">Not Answered</span></div>
+                    <div style="display:flex; align-items:center; gap:4px; grid-column:span 2;"><div style="width:14px; height:14px; background:#7c3aed; border: 1px solid #7c3aed; border-radius:4px; position:relative;"><div style="position:absolute; bottom:-3px; right:-3px; width:7px; height:7px; background:#16a34a; border-radius:50%; border:1px solid white;"></div></div><span class="legend-text" style="margin-left: 2px;">Marked and Answered</span></div>
                 </div>
             </div>"""
             st.markdown(html_legend, unsafe_allow_html=True)
-            
-        st.markdown(f"<div style='background:linear-gradient(90deg, #eff6ff, #dbeafe); padding:8px; font-weight:800; color:#1e40af; font-size:10px; text-transform:uppercase; border-radius:8px; margin-bottom:10px; text-align:center;'>SECTION: {st.session_state.topic}</div>", unsafe_allow_html=True)
+        st.markdown(f"<div style='background:linear-gradient(90deg, #eff6ff, #dbeafe); padding:10px; font-weight:800; color:#1e40af; font-size:11px; text-transform:uppercase; border-radius:8px; margin-bottom:12px; text-align:center;'>SECTION: {st.session_state.topic}</div>", unsafe_allow_html=True)
 
         with st.expander("System Engine", expanded=False):
             st.markdown("<div id='hidden-engine-marker'></div>", unsafe_allow_html=True)
@@ -1651,7 +1679,7 @@ def render_exam():
         st.markdown(f"<p class='exam-kicker' style='font-weight:700; opacity:0.8;'>Live Assessment &middot; {st.session_state.topic}</p>", unsafe_allow_html=True)
         st.progress((q_idx + 1) / total_q)
         
-        # REMOVED FIXED HEIGHT constraint: Content now perfectly conforms to exactly how large the question and options are natively. 
+        # Container adjusts naturally to content height
         with st.container(border=False):
             raw_q = q_data['q']
             clean_q = re.sub(r'^[Qq]?(?:uestion)?\s*\d+[\.\)]\s*', '', raw_q)
@@ -1679,24 +1707,19 @@ def render_exam():
                 st.radio("Options:", options=q_data['options'], index=idx, key=f"radio_ans_{q_idx}", on_change=on_radio_change, args=(q_idx,), label_visibility="collapsed")
 
             # Added clear structural separator that hugs directly beneath the options natively
-            st.markdown("<hr style='margin: 1.25rem 0 1rem 0; border: none; border-top: 1px solid rgba(128, 128, 128, 0.2);'>", unsafe_allow_html=True)
+            st.markdown("<hr style='margin: 1rem 0; border: none; border-top: 1px solid rgba(128, 128, 128, 0.2);'>", unsafe_allow_html=True)
             
             is_cur_marked = q_idx in st.session_state.marked_questions
             
-            # Response / Action Buttons Layout Relocation (Immediately follows options inside natural scroll)
-            act_col1, act_col2 = st.columns(2)
-            act_col1.button("🧹 Clear Response", on_click=clear_answer, args=(q_idx,), use_container_width=True)
-            act_col2.button("🚩 Unmark" if is_cur_marked else "🚩 Mark for Review", on_click=toggle_mark, args=(q_idx,), use_container_width=True)
-            
-            st.write("<div style='height:0.25rem;'></div>", unsafe_allow_html=True)
-            
-            # Question Navigation Layout Relocation
-            nav_col1, nav_col2 = st.columns(2)
-            nav_col1.button("⏪ Previous Question", on_click=nav_prev, use_container_width=True)
+            # Action Buttons - All in one responsive row. Will be 4 columns on desktop, 2x2 grid on mobile via CSS
+            act_cols = st.columns(4)
+            act_cols[0].button("Clear Response", on_click=clear_answer, args=(q_idx,), use_container_width=True)
+            act_cols[1].button("Unmark" if is_cur_marked else "Mark for Review", on_click=toggle_mark, args=(q_idx,), use_container_width=True)
+            act_cols[2].button("Previous", on_click=nav_prev, use_container_width=True)
             if q_idx == total_q - 1: 
-                nav_col2.button("Finish Test", disabled=True, use_container_width=True)
+                act_cols[3].button("Finish", disabled=True, use_container_width=True)
             else: 
-                nav_col2.button("Next Question ⏩", type="primary", on_click=nav_next, use_container_width=True)
+                act_cols[3].button("Next", type="primary", on_click=nav_next, use_container_width=True)
 
 def render_result():
     history = load_history().get(st.session_state.current_user, [])
