@@ -682,13 +682,23 @@ def inject_custom_css():
         }}
 
         html {{ font-size: 16px; }}
-        .stApp {{ color: var(--sb-ink); background-color: #f1f5f9; }}
+        .stApp {{
+            color: var(--sb-ink);
+            background-color: #e2e8f0;
+            color-scheme: light;
+        }}
         header[data-testid="stHeader"] {{ background: transparent !important; }}
         .block-container {{
             max-width: 1440px !important;
             padding: clamp(1rem, 2vw, 2rem) !important;
-            margin: 0 auto !important;
+            margin: .85rem auto !important;
+            min-height: calc(100vh - 3rem);
+            border: 1px solid rgba(203, 213, 225, .9);
+            border-radius: 20px;
+            background: rgba(248, 250, 252, .98) !important;
+            box-shadow: 0 18px 45px rgba(15, 23, 42, .16);
         }}
+        section[data-testid="stMain"] {{ color: var(--sb-ink) !important; }}
         section[data-testid="stMain"] p,
         section[data-testid="stMain"] h1,
         section[data-testid="stMain"] h2,
@@ -831,9 +841,12 @@ def inject_custom_css():
         /* Navigation */
         section[data-testid="stSidebar"] {{ background: #0f172a !important; border-right: 1px solid #1e293b; }}
         section[data-testid="stSidebar"] * {{ color: #e2e8f0 !important; }}
-        section[data-testid="stSidebar"] div.stButton > button {{ background: transparent !important; border-color: transparent !important; color: #cbd5e1 !important; text-align: left !important; box-shadow: none !important; }}
-        section[data-testid="stSidebar"] div.stButton > button:hover:not(:disabled) {{ background: rgba(148, 163, 184, .15) !important; color: #ffffff !important; transform: none; }}
-        section[data-testid="stSidebar"] div.stButton > button[kind="secondary"] {{ color: #fecaca !important; background: rgba(220, 38, 38, .12) !important; }}
+        section[data-testid="stSidebar"] div.stButton > button,
+        section[data-testid="stSidebar"] div.stButton > button * {{ background: transparent !important; border-color: transparent !important; color: #cbd5e1 !important; text-align: left !important; box-shadow: none !important; }}
+        section[data-testid="stSidebar"] div.stButton > button:hover:not(:disabled),
+        section[data-testid="stSidebar"] div.stButton > button:hover:not(:disabled) * {{ background: rgba(148, 163, 184, .15) !important; color: #ffffff !important; transform: none; }}
+        section[data-testid="stSidebar"] div.stButton > button[kind="secondary"],
+        section[data-testid="stSidebar"] div.stButton > button[kind="secondary"] * {{ color: #fecaca !important; background: rgba(220, 38, 38, .12) !important; }}
         section[data-testid="stSidebar"] [data-testid="stSidebarContent"] {{ padding-top: 1rem; }}
         .sidebar-brand {{ margin: .3rem 0 1.2rem; padding: .85rem .8rem; border-radius: 12px; background: linear-gradient(135deg, rgba(37, 99, 235, .28), rgba(79, 70, 229, .16)); border: 1px solid rgba(147, 197, 253, .22); }}
         .sidebar-brand strong {{ display: block; color: #ffffff !important; font-size: 1.05rem; letter-spacing: -.02em; }}
