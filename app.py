@@ -10,12 +10,17 @@ import pickle
 import uuid
 import math
 import io
+import logging
 from supabase import create_client, Client
+
+# Configure logging for production-safe error tracking
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
 # ==========================================
 # 0. DATABASE CONNECTION SETUP
 # ==========================================
-@st.cache_resource
+@st.cache_resource(show_spinner=False)
 def init_connection():
     # Fetch credentials from Streamlit secrets
     url = st.secrets["SUPABASE_URL"]
@@ -57,7 +62,7 @@ DEFAULT_STRUCTURE = {
     "Current affairs": []
 }
 
-# Ensure Local Physical Folders exist (as requested)
+# Ensure Local Physical Folders exist
 for base_folder in [CSV_FOLDER, ADVANCED_CSV_FOLDER]:
     for root_cat, sub_cats in DEFAULT_STRUCTURE.items():
         root_path = os.path.join(base_folder, root_cat)
@@ -66,7 +71,7 @@ for base_folder in [CSV_FOLDER, ADVANCED_CSV_FOLDER]:
             os.makedirs(os.path.join(root_path, sub_cat), exist_ok=True)
 
 # ==========================================
-# DATA MANAGEMENT FUNCTIONS (CLOUD BASED)
+# DATA MANAGEMENT FUNCTIONS (CLOUD OPTIMIZED)
 # ==========================================
 
 def check_and_create_default_folders():
@@ -81,14 +86,12 @@ def check_and_create_default_folders():
             # If completely empty, generate all default folders for both banks
             for bank_type in ["Basic", "Advanced"]:
                 for root_cat, sub_cats in DEFAULT_STRUCTURE.items():
-                    # Create root category folder
                     supabase.table('question_banks').insert({
                         'bank_type': bank_type, 
                         'folder_path': root_cat, 
                         'file_name': '.keep', 
                         'csv_data': ''
                     }).execute()
-                    # Create subcategory folders
                     for sub_cat in sub_cats:
                         supabase.table('question_banks').insert({
                             'bank_type': bank_type, 
@@ -100,43 +103,49 @@ def check_and_create_default_folders():
     except Exception as e:
         st.error(f"⚠️ Supabase Folder Generation Error: {e} (Hint: Check if RLS is disabled on 'question_banks' table!)")
 
-def get_all_users():
+@st.cache_data(show_spinner=False, ttl=300)
+def get_all_users_cached():
     try:
-        response = supabase.table('users').select("*").execute()
-        users_dict = {}
-        for row in response.data:
-            users_dict[row['username']] = row['password']
+        response = supabase.table('users').select("username, password").execute()
+        users_dict = {row['username']: row['password'] for row in response.data}
         if not users_dict:
             return {"Jitendra (Admin)": "Admin@1996"}
         return users_dict
     except Exception as e:
-        st.error(f"Database Connection Error: {e}")
+        logger.error(f"Database Connection Error fetching users: {e}")
         return {"Jitendra (Admin)": "Admin@1996"}
+
+def get_all_users():
+    return get_all_users_cached()
 
 def add_new_user_to_db(username, password):
     try:
-        data = {"username": username, "password": password, "role": "Student"}
-        supabase.table('users').insert(data).execute()
+        supabase.table('users').insert({"username": username, "password": password, "role": "Student"}).execute()
+        get_all_users_cached.clear()
         return True
     except Exception as e:
+        logger.error(f"Error adding user: {e}")
         st.error(f"Error adding user: {e}")
         return False
 
 def delete_user_from_db(username):
     try:
         supabase.table('users').delete().eq('username', username).execute()
+        get_all_users_cached.clear()
         return True
-    except:
+    except Exception as e:
+        logger.error(f"Error deleting user: {e}")
         return False
 
-# --- CLOUD FETCHING FUNCTIONS FOR HISTORY ---
-def get_supabase_history(username):
+# --- SMART CACHING FOR CLOUD HISTORY ---
+@st.cache_data(show_spinner=False, ttl=300)
+def get_supabase_history_cached(username):
     """Fetches test history from Supabase for a specific user"""
     try:
         response = supabase.table('exam_history').select("*").eq('username', username).execute()
         history = []
         
-        # Sort by datetime sequentially to match old graph progression logic
+        # Sort by datetime sequentially to match graph progression logic
         sorted_data = sorted(response.data, key=lambda x: x.get('datetime', ''))
 
         for row in sorted_data:
@@ -165,15 +174,18 @@ def get_supabase_history(username):
             history.append(attempt_data)
         return history
     except Exception as e:
-        print(f"Error fetching history from Supabase: {e}")
+        logger.error(f"Error fetching history from Supabase: {e}")
         return []
 
-def get_all_supabase_history():
+def get_supabase_history(username):
+    return get_supabase_history_cached(username)
+
+@st.cache_data(show_spinner=False, ttl=300)
+def get_all_supabase_history_cached():
     """Fetches all test histories from Supabase for Admin reporting"""
     try:
         response = supabase.table('exam_history').select("*").execute()
         history_dict = {}
-        
         sorted_data = sorted(response.data, key=lambda x: x.get('datetime', ''))
         
         for row in sorted_data:
@@ -207,18 +219,24 @@ def get_all_supabase_history():
             history_dict[username].append(attempt_data)
         return history_dict
     except Exception as e:
-        print(f"Error fetching all history from Supabase: {e}")
+        logger.error(f"Error fetching all history from Supabase: {e}")
         return {}
 
-# --- CLOUD FUNCTIONS FOR SETTINGS (Penalties, Timers, Attempts) ---
+def get_all_supabase_history():
+    return get_all_supabase_history_cached()
 
-def get_neg_mark(test_key):
+# --- CLOUD SETTINGS FUNCTIONS (Penalties, Timers, Attempts) ---
+
+@st.cache_data(show_spinner=False, ttl=600)
+def get_neg_mark_cached(test_key):
     try:
         res = supabase.table('test_penalties').select('penalty').eq('test_file', test_key).execute()
-        if res.data: 
-            return float(res.data[0]['penalty'])
-    except: pass
+        if res.data: return float(res.data[0]['penalty'])
+    except Exception as e: logger.error(f"DB Error getting neg mark: {e}")
     return 0.0
+
+def get_neg_mark(test_key):
+    return get_neg_mark_cached(test_key)
 
 def set_neg_mark(test_key, value):
     try:
@@ -227,16 +245,21 @@ def set_neg_mark(test_key, value):
             supabase.table('test_penalties').update({'penalty': float(value)}).eq('id', res.data[0]['id']).execute()
         else:
             supabase.table('test_penalties').insert({'test_file': test_key, 'penalty': float(value)}).execute()
+        get_neg_mark_cached.clear(test_key)
     except Exception as e: 
-        print(f"Error setting neg mark: {e}")
+        logger.error(f"Error setting neg mark: {e}")
 
-def get_timer_config(test_key):
+@st.cache_data(show_spinner=False, ttl=600)
+def get_timer_config_cached(test_key):
     try:
-        res = supabase.table('test_timers').select('*').eq('test_file', test_key).execute()
+        res = supabase.table('test_timers').select('mode, value').eq('test_file', test_key).execute()
         if res.data:
             return {"mode": res.data[0]['mode'], "value": res.data[0]['value']}
-    except: pass
+    except Exception as e: logger.error(f"DB Error getting timer config: {e}")
     return {"mode": "Total Time", "value": 30}
+
+def get_timer_config(test_key):
+    return get_timer_config_cached(test_key)
 
 def set_timer_config(test_key, mode, value):
     try:
@@ -245,17 +268,24 @@ def set_timer_config(test_key, mode, value):
             supabase.table('test_timers').update({'mode': mode, 'value': value}).eq('id', res.data[0]['id']).execute()
         else:
             supabase.table('test_timers').insert({'test_file': test_key, 'mode': mode, 'value': value}).execute()
+        get_timer_config_cached.clear(test_key)
     except Exception as e:
-        print(f"Error setting timer: {e}")
+        logger.error(f"Error setting timer: {e}")
+
+# Resolves N+1 query issue for attempts on the Dashboard
+@st.cache_data(show_spinner=False, ttl=120)
+def get_user_attempts_map(username):
+    """Fetches all attempts for a user efficiently in a single query."""
+    try:
+        res = supabase.table('user_attempts').select('test_file, allowed, used').eq('username', username).execute()
+        return {row['test_file']: {'allowed': row['allowed'], 'used': row['used']} for row in res.data}
+    except Exception as e:
+        logger.error(f"Error fetching attempts map: {e}")
+        return {}
 
 def get_attempt_data(user, test_file):
-    try:
-        res = supabase.table('user_attempts').select('*').eq('username', user).eq('test_file', test_file).execute()
-        if res.data: 
-            return {'allowed': res.data[0]['allowed'], 'used': res.data[0]['used']}
-    except: pass
-    # Feature Update: Default limit changed to 5
-    return {'allowed': 5, 'used': 0}
+    attempts_map = get_user_attempts_map(user)
+    return attempts_map.get(test_file, {'allowed': 5, 'used': 0})
 
 def increment_attempt(user, test_file):
     curr = get_attempt_data(user, test_file)
@@ -265,8 +295,9 @@ def increment_attempt(user, test_file):
             supabase.table('user_attempts').update({'used': curr['used'] + 1}).eq('id', res.data[0]['id']).execute()
         else:
             supabase.table('user_attempts').insert({'username': user, 'test_file': test_file, 'allowed': curr['allowed'], 'used': curr['used'] + 1}).execute()
+        get_user_attempts_map.clear(user)
     except Exception as e:
-        print(f"Error incrementing attempt: {e}")
+        logger.error(f"Error incrementing attempt: {e}")
 
 def set_allowed_attempts(user, test_file, allowed_count):
     curr = get_attempt_data(user, test_file)
@@ -276,11 +307,13 @@ def set_allowed_attempts(user, test_file, allowed_count):
             supabase.table('user_attempts').update({'allowed': allowed_count}).eq('id', res.data[0]['id']).execute()
         else:
             supabase.table('user_attempts').insert({'username': user, 'test_file': test_file, 'allowed': allowed_count, 'used': curr['used']}).execute()
+        get_user_attempts_map.clear(user)
     except Exception as e:
-        print(f"Error setting allowed attempts: {e}")
+        logger.error(f"Error setting allowed attempts: {e}")
 
 # --- CLOUD CSV QUESTION BANK FUNCTIONS ---
-def get_cloud_hierarchy(bank_type):
+@st.cache_data(show_spinner=False, ttl=300)
+def get_cloud_hierarchy_cached(bank_type):
     """Returns a list of unique folders and a list of file paths from Supabase"""
     try:
         res = supabase.table('question_banks').select('folder_path, file_name').eq('bank_type', bank_type).execute()
@@ -290,7 +323,6 @@ def get_cloud_hierarchy(bank_type):
             fp = r['folder_path']
             if fp != 'Root':
                 folders.add(fp)
-                # Ensure parent is recorded if nested
                 parts = fp.split('/')
                 if len(parts) > 1:
                     folders.add(parts[0])
@@ -302,8 +334,21 @@ def get_cloud_hierarchy(bank_type):
                     files.append(f"{fp}/{r['file_name']}")
         return sorted(list(folders)), sorted(files)
     except Exception as e:
-        print(f"Error fetching Cloud Hierarchy: {e}")
+        logger.error(f"Error fetching Cloud Hierarchy: {e}")
         return [], []
+
+def get_cloud_hierarchy(bank_type):
+    return get_cloud_hierarchy_cached(bank_type)
+
+@st.cache_data(show_spinner=False, ttl=120)
+def get_user_feedback_cached(username):
+    try:
+        fb_res = supabase.table('user_feedback').select('feedback').eq('username', username).execute()
+        if fb_res.data:
+            return fb_res.data[0]['feedback']
+    except Exception as e:
+        logger.error(f"Error fetching feedback: {e}")
+    return ""
 
 def nav_admin_up():
     curr = st.session_state.admin_current_path
@@ -316,51 +361,62 @@ def nav_admin_down(folder):
     if curr: st.session_state.admin_current_path = curr + '/' + folder
     else: st.session_state.admin_current_path = folder
 
-def record_detailed_attempt(user, test_key, original_file):
-    correct, incorrect, unanswered, negative, final_score = calculate_detailed_score(test_key)
-    total_q = len(st.session_state.questions)
-    
+# Performance Optimization: Merged dual-loop calculations into single pass computation
+def evaluate_assessment(test_key, questions, user_answers):
+    """Calculates scores and builds detailed question reports efficiently in a single pass."""
+    score, incorrect, unanswered = 0, 0, 0
+    neg_mark_value = get_neg_mark(test_key)
     q_details = []
-    for i, q in enumerate(st.session_state.questions):
+    
+    for i, q in enumerate(questions):
         is_match = (q.get('type') == 'match')
-        user_ans = st.session_state.user_answers.get(i)
+        user_ans = user_answers.get(i)
         
         q_num = i + 1
-        raw_q = q['q']
-        clean_q = re.sub(r'^[Qq]?(?:uestion)?\s*\d+[\.\)]\s*', '', raw_q)
+        clean_q = re.sub(r'^[Qq]?(?:uestion)?\s*\d+[\.\)]\s*', '', q['q'])
+        status, marks, neg = "Unanswered", 0, 0
+        c_ans_str, u_ans_str = "N/A", "None"
         
         if user_ans is None or (is_match and not user_ans):
-            status = "Unanswered"
-            marks = 0; neg = 0
-            u_ans_str = "None"
-            c_ans_str = str(q['ans']) if is_match else str(q['options'][q['ans']] if 0 <= q['ans'] < len(q['options']) else "N/A")
+            unanswered += 1
+            if is_match: c_ans_str = str(q['ans'])
+            else: c_ans_str = str(q['options'][q['ans']] if 0 <= q['ans'] < len(q['options']) else "N/A")
         else:
+            u_ans_str = str(user_ans)
             if is_match:
                 correct_ans = q['ans']
                 c_ans_str = str(correct_ans)
-                u_ans_str = str(user_ans)
                 if isinstance(user_ans, dict) and user_ans == correct_ans:
-                    status = "Correct"; marks = 1; neg = 0
+                    status, marks = "Correct", 1
+                    score += 1
                 else:
-                    status = "Incorrect"; marks = 0; neg = get_neg_mark(test_key)
+                    status, neg = "Incorrect", neg_mark_value
+                    incorrect += 1
             else:
                 correct_ans = q['options'][q['ans']] if 0 <= q['ans'] < len(q['options']) else None
                 c_ans_str = str(correct_ans)
-                u_ans_str = str(user_ans)
                 if user_ans == correct_ans:
-                    status = "Correct"; marks = 1; neg = 0
+                    status, marks = "Correct", 1
+                    score += 1
                 else:
-                    status = "Incorrect"; marks = 0; neg = get_neg_mark(test_key)
+                    status, neg = "Incorrect", neg_mark_value
+                    incorrect += 1
                     
         q_details.append({
-            "q_num": q_num,
-            "question": clean_q,
-            "user_ans": u_ans_str,
-            "correct_ans": c_ans_str,
-            "status": status,
-            "marks": marks,
-            "negative": neg
+            "q_num": q_num, "question": clean_q, "user_ans": u_ans_str,
+            "correct_ans": c_ans_str, "status": status, "marks": marks, "negative": neg
         })
+        
+    negative_marks = incorrect * neg_mark_value
+    final_score = score - negative_marks
+    return score, incorrect, unanswered, negative_marks, final_score, q_details
+
+def record_detailed_attempt(user, test_key, original_file):
+    # Retrieve optimized single-pass evaluations
+    correct, incorrect, unanswered, negative, final_score, q_details = evaluate_assessment(
+        test_key, st.session_state.questions, st.session_state.user_answers
+    )
+    total_q = len(st.session_state.questions)
         
     attempt_data = {
         "test_name": os.path.basename(original_file).replace('.csv', '').replace('_', ' '),
@@ -395,13 +451,15 @@ def record_detailed_attempt(user, test_key, original_file):
             "negative_marks": attempt_data["negative_marks"],
             "percentage": attempt_data["percentage"],
             "datetime": attempt_data["datetime"],
-            # BUG 1 FIX: Passed directly as a list/dict object.
             "q_details": attempt_data["q_details"]
         }
         supabase.table("exam_history").insert(supabase_data).execute()
+        # Invalidate related caches directly
+        get_supabase_history_cached.clear(user)
+        get_all_supabase_history_cached.clear()
     except Exception as e:
         st.session_state.db_save_error = str(e)
-        print(f"Failed to sync result to Supabase: {e}")
+        logger.error(f"Failed to sync result to Supabase: {e}")
 
 def record_attempt_usage():
     if not st.session_state.get('attempt_recorded', False):
@@ -438,15 +496,15 @@ def destroy_active_assessment():
     st.session_state.current_test_filename = ""
     st.session_state.attempt_recorded = False
 
-    # Invalidate the resume session file so it can't be restored
+    # Invalidate the resume session file safely
     sid = st.session_state.get("sid")
     if sid:
         session_path = os.path.join(SESSION_FOLDER, f"{sid}.pkl")
         if os.path.exists(session_path):
             try:
                 os.remove(session_path)
-            except:
-                pass
+            except Exception as e:
+                logger.error(f"Failed cleaning session pkl: {e}")
 
 # ==========================================
 # 2. STATE INITIALIZATION
@@ -461,7 +519,7 @@ def init_session():
         'current_test_filename': "", 'attempt_recorded': False, 'admin_current_path': "",
         'sid': "", 'current_bank': "Basic", 'last_admin_bank': "Basic",
         'query_input': "", 'history_view_index': -1, 'folders_checked': False,
-        'editing_item': None
+        'editing_item': None, 'db_save_error': None
     }
 
     query_params = st.query_params
@@ -583,7 +641,8 @@ def load_quiz(file_name):
                         'options': opts, 'ans': int(ans_str) - 1 if ans_str.isdigit() else -1
                     })
         except Exception as e:
-            st.error(f"Error parsing Cloud File: {e}")
+            logger.error(f"Error parsing Cloud File: {e}")
+            st.error("An error occurred configuring the assessment engine.")
             st.stop()
                 
         t_config = get_timer_config(test_key)
@@ -608,27 +667,6 @@ def load_quiz(file_name):
         st.session_state.is_paused = False
         st.session_state.current_test_filename = test_key
         st.session_state.attempt_recorded = False
-
-def calculate_detailed_score(test_key):
-    score = 0; incorrect = 0; unanswered = 0
-    neg_mark_value = get_neg_mark(test_key)
-
-    for i, q in enumerate(st.session_state.questions):
-        is_match = (q.get('type') == 'match')
-        user_ans = st.session_state.user_answers.get(i)
-        if user_ans is None or (is_match and not user_ans): unanswered += 1
-        else:
-            if is_match:
-                if isinstance(user_ans, dict) and user_ans == q['ans']: score += 1
-                else: incorrect += 1
-            else:
-                correct_ans = q['options'][q['ans']] if 0 <= q['ans'] < len(q['options']) else None
-                if user_ans == correct_ans: score += 1
-                else: incorrect += 1
-
-    negative_marks = incorrect * neg_mark_value
-    final_score = score - negative_marks
-    return score, incorrect, unanswered, negative_marks, final_score
 
 def nav_goto(q_idx):
     record_activity()
@@ -856,18 +894,22 @@ def render_sidebar():
                 time.sleep(0.4)
                 st.rerun()
 
+@st.cache_data(show_spinner=False, ttl=120)
+def get_user_queries_cached():
+    try:
+        res = supabase.table('user_queries').select('*').execute()
+        return sorted(res.data, key=lambda x: x.get('datetime', ''))
+    except Exception as e:
+        logger.error(f"Failed to fetch queries: {e}")
+        return []
+
 def render_user_queries():
     if "Admin" not in st.session_state.current_user: st.error("Unauthorized!"); return
     st.markdown("<h2 style='font-weight:800;'>Support Center & Queries</h2>", unsafe_allow_html=True)
     st.write("---")
     
-    try:
-        res = supabase.table('user_queries').select('*').execute()
-        queries = sorted(res.data, key=lambda x: x.get('datetime', ''))
-    except Exception as e:
-        st.error(f"Failed to fetch queries: {e}")
-        queries = []
-        
+    queries = get_user_queries_cached()
+    
     col1, col2 = st.columns([2, 1])
     search_u = col1.text_input("🔍 Search by Username", placeholder="Type username...", key="admin_search_query")
     filter_s = col2.selectbox("📁 Filter by Status", ["All", "Pending", "Resolved"], key="admin_filter_query")
@@ -893,9 +935,11 @@ def render_user_queries():
                                     "reply": reply_input, 
                                     "status": "Resolved"
                                 }).eq("id", q["id"]).execute()
+                                get_user_queries_cached.clear()
                                 st.toast("Reply sent!", icon="✅"); time.sleep(0.5); st.rerun()
                             except Exception as e:
-                                st.error(f"Error saving reply: {e}")
+                                logger.error(f"Error saving reply: {e}")
+                                st.error("Failed to save reply.")
                     else: st.warning("Please enter a reply.")
             else:
                 st.markdown(f"**Admin Reply:**")
@@ -906,7 +950,6 @@ def render_admin():
     st.markdown("<h2 style='font-weight:800;'>⚙️ Admin Control Panel</h2>", unsafe_allow_html=True)
     st.write("---")
     
-    # Safely fetch options for dropdowns
     _, basic_files = get_cloud_hierarchy("Basic")
     _, adv_files = get_cloud_hierarchy("Advanced")
     
@@ -942,28 +985,39 @@ def render_admin():
             new_f = st.text_input("New Folder", key="new_f_input", label_visibility="collapsed", placeholder="Folder Name")
             if st.button("Create Folder", use_container_width=True):
                 if new_f:
-                    new_fp = new_f.strip() if current_path == '' else f"{current_path}/{new_f.strip()}"
-                    supabase.table('question_banks').insert({
-                        'bank_type': admin_bank, 'folder_path': new_fp, 'file_name': '.keep', 'csv_data': ''
-                    }).execute()
-                    st.toast(f"Created '{new_f}'", icon="✅"); st.rerun()
+                    try:
+                        new_fp = new_f.strip() if current_path == '' else f"{current_path}/{new_f.strip()}"
+                        supabase.table('question_banks').insert({
+                            'bank_type': admin_bank, 'folder_path': new_fp, 'file_name': '.keep', 'csv_data': ''
+                        }).execute()
+                        get_cloud_hierarchy_cached.clear(admin_bank)
+                        st.toast(f"Created '{new_f}'", icon="✅"); st.rerun()
+                    except Exception as e:
+                        logger.error(f"Error creating folder: {e}")
         with c_upld:
             uploaded_file = st.file_uploader("Upload CSV", type=['csv'], label_visibility="collapsed")
             if uploaded_file:
                 with st.spinner("Uploading to Database..."):
-                    content = uploaded_file.getvalue().decode('utf-8-sig', errors='ignore')
-                    supabase.table('question_banks').insert({
-                        'bank_type': admin_bank, 'folder_path': current_path if current_path != '' else 'Root', 
-                        'file_name': uploaded_file.name, 'csv_data': content
-                    }).execute()
-                    st.toast("Uploaded securely to Cloud!", icon="✅"); time.sleep(0.5); st.rerun()
+                    try:
+                        content = uploaded_file.getvalue().decode('utf-8-sig', errors='ignore')
+                        supabase.table('question_banks').insert({
+                            'bank_type': admin_bank, 'folder_path': current_path if current_path != '' else 'Root', 
+                            'file_name': uploaded_file.name, 'csv_data': content
+                        }).execute()
+                        get_cloud_hierarchy_cached.clear(admin_bank)
+                        st.toast("Uploaded securely to Cloud!", icon="✅"); time.sleep(0.5); st.rerun()
+                    except Exception as e:
+                        logger.error(f"Error uploading CSV: {e}")
                 
         st.write("---")
         
-        # Fetch cloud files for current bank
-        res = supabase.table('question_banks').select('id, folder_path, file_name, created_at, csv_data').eq('bank_type', admin_bank).execute()
-        records = res.data
-        
+        try:
+            res = supabase.table('question_banks').select('id, folder_path, file_name, created_at, csv_data').eq('bank_type', admin_bank).execute()
+            records = res.data
+        except Exception as e:
+            logger.error(f"Error fetching directory contents: {e}")
+            records = []
+            
         subfolders = set()
         files = []
         
@@ -995,15 +1049,19 @@ def render_admin():
                     new_fn = ec1.text_input("New Name", value=folder, key=f"in_{edit_key}", label_visibility="collapsed")
                     if ec2.button("Save", key=f"save_{edit_key}", type="primary", use_container_width=True):
                         if new_fn and new_fn.strip() != folder:
-                            old_prefix = folder if current_path == '' else f"{current_path}/{folder}"
-                            new_prefix = new_fn.strip() if current_path == '' else f"{current_path}/{new_fn.strip()}"
-                            for r in records:
-                                rfp = r['folder_path']
-                                if rfp == old_prefix:
-                                    supabase.table('question_banks').update({'folder_path': new_prefix}).eq('id', r['id']).execute()
-                                elif rfp.startswith(old_prefix + '/'):
-                                    new_fp = rfp.replace(old_prefix, new_prefix, 1)
-                                    supabase.table('question_banks').update({'folder_path': new_fp}).eq('id', r['id']).execute()
+                            try:
+                                old_prefix = folder if current_path == '' else f"{current_path}/{folder}"
+                                new_prefix = new_fn.strip() if current_path == '' else f"{current_path}/{new_fn.strip()}"
+                                for r in records:
+                                    rfp = r['folder_path']
+                                    if rfp == old_prefix:
+                                        supabase.table('question_banks').update({'folder_path': new_prefix}).eq('id', r['id']).execute()
+                                    elif rfp.startswith(old_prefix + '/'):
+                                        new_fp = rfp.replace(old_prefix, new_prefix, 1)
+                                        supabase.table('question_banks').update({'folder_path': new_fp}).eq('id', r['id']).execute()
+                                get_cloud_hierarchy_cached.clear(admin_bank)
+                            except Exception as e:
+                                logger.error(f"Error renaming folder: {e}")
                         st.session_state.editing_item = None
                         st.rerun()
                     if ec3.button("Cancel", key=f"cancel_{edit_key}", use_container_width=True):
@@ -1016,11 +1074,15 @@ def render_admin():
                         st.session_state.editing_item = edit_key
                         st.rerun()
                     if fc3.button("Delete", key=f"del_f_{current_path}_{folder}", use_container_width=True):
-                        old_prefix = folder if current_path == '' else f"{current_path}/{folder}"
-                        for r in records:
-                            rfp = r['folder_path']
-                            if rfp == old_prefix or rfp.startswith(old_prefix + '/'):
-                                supabase.table('question_banks').delete().eq('id', r['id']).execute()
+                        try:
+                            old_prefix = folder if current_path == '' else f"{current_path}/{folder}"
+                            for r in records:
+                                rfp = r['folder_path']
+                                if rfp == old_prefix or rfp.startswith(old_prefix + '/'):
+                                    supabase.table('question_banks').delete().eq('id', r['id']).execute()
+                            get_cloud_hierarchy_cached.clear(admin_bank)
+                        except Exception as e:
+                            logger.error(f"Error deleting folder: {e}")
                         st.rerun()
                         
         st.write("---")
@@ -1053,8 +1115,12 @@ def render_admin():
                     new_fn = ec1.text_input("New Name", value=f_name, key=f"in_{edit_key}", label_visibility="collapsed")
                     if ec2.button("Save", key=f"save_{edit_key}", type="primary", use_container_width=True):
                         if new_fn and new_fn.strip() != f_name:
-                            cn = new_fn.strip() if new_fn.strip().endswith('.csv') else new_fn.strip() + '.csv'
-                            supabase.table('question_banks').update({'file_name': cn}).eq('id', file_id).execute()
+                            try:
+                                cn = new_fn.strip() if new_fn.strip().endswith('.csv') else new_fn.strip() + '.csv'
+                                supabase.table('question_banks').update({'file_name': cn}).eq('id', file_id).execute()
+                                get_cloud_hierarchy_cached.clear(admin_bank)
+                            except Exception as e:
+                                logger.error(f"Error renaming file: {e}")
                         st.session_state.editing_item = None
                         st.rerun()
                     if ec3.button("Cancel", key=f"cancel_{edit_key}", use_container_width=True):
@@ -1064,7 +1130,11 @@ def render_admin():
                     mc1, mc2, mc3 = st.columns([6, 3, 3])
                     tgt = mc1.selectbox("Move", ["-- Move to Folder --"] + all_folders, key=f"mov_{file_id}", label_visibility="collapsed")
                     if tgt != "-- Move to Folder --":
-                        supabase.table('question_banks').update({'folder_path': tgt}).eq('id', file_id).execute()
+                        try:
+                            supabase.table('question_banks').update({'folder_path': tgt}).eq('id', file_id).execute()
+                            get_cloud_hierarchy_cached.clear(admin_bank)
+                        except Exception as e:
+                            logger.error(f"Error moving file: {e}")
                         st.rerun()
                     
                     if mc2.button("Rename", key=f"rn_btn_{file_id}", use_container_width=True):
@@ -1072,7 +1142,11 @@ def render_admin():
                         st.rerun()
                     
                     if mc3.button("Delete", key=f"del_{file_id}", use_container_width=True):
-                        supabase.table('question_banks').delete().eq('id', file_id).execute()
+                        try:
+                            supabase.table('question_banks').delete().eq('id', file_id).execute()
+                            get_cloud_hierarchy_cached.clear(admin_bank)
+                        except Exception as e:
+                            logger.error(f"Error deleting file: {e}")
                         st.rerun()
 
     with st.expander("⚖️ Scoring & Penalty Configuration", expanded=False):
@@ -1115,8 +1189,12 @@ def render_admin():
             ch_u = st.selectbox("Target Account", list(users.keys()))
             ch_p = st.text_input("New Secure Password", type="password")
             if st.button("Reset Password", type="primary") and ch_p:
-                supabase.table('users').update({"password": ch_p}).eq("username", ch_u).execute()
-                st.toast("Password Reset Successfully!", icon="✅")
+                try:
+                    supabase.table('users').update({"password": ch_p}).eq("username", ch_u).execute()
+                    get_all_users_cached.clear()
+                    st.toast("Password Reset Successfully!", icon="✅")
+                except Exception as e:
+                    logger.error(f"Error resetting password: {e}")
 
     with st.expander("📊 User Performance Reports", expanded=False):
         history = get_all_supabase_history()
@@ -1181,14 +1259,7 @@ def render_admin():
                 with tc2: st.markdown("**Accuracy Trend (%)**"); st.line_chart(accs, height=150)
                 
                 st.markdown("#### 💬 Admin Feedback & Suggestions")
-                
-                current_fb = ""
-                try:
-                    fb_res = supabase.table('user_feedback').select('feedback').eq('username', sel_u).execute()
-                    if fb_res.data:
-                        current_fb = fb_res.data[0]['feedback']
-                except Exception as e: pass
-                
+                current_fb = get_user_feedback_cached(sel_u)
                 new_fb = st.text_area("Write personalized feedback for this user:", value=current_fb, height=120)
                 
                 if st.button("Save Feedback", type="primary", key=f"save_fb_{sel_u}"):
@@ -1197,9 +1268,11 @@ def render_admin():
                             "username": sel_u,
                             "feedback": new_fb
                         }).execute()
+                        get_user_feedback_cached.clear(sel_u)
                         st.toast("Feedback saved securely to Cloud!", icon="✅")
                     except Exception as e:
-                        st.error(f"Error saving feedback: {e}")
+                        logger.error(f"Error saving feedback: {e}")
+                        st.error("Error saving feedback.")
         else:
             st.info("No user performance data available yet.")
 
@@ -1229,19 +1302,26 @@ def render_dashboard_practice():
             files_to_disp = all_files
 
     st.write("<br>", unsafe_allow_html=True)
-    if not files_to_disp: st.info("No assessments found matching criteria.")
+    if not files_to_disp: 
+        st.info("No assessments found matching criteria.")
     else:
+        # Optimized N+1 Query mapping for attempts
+        attempts_map = get_user_attempts_map(st.session_state.current_user)
+        
         for f in files_to_disp:
             with st.container(border=True):
                 test_k = f if st.session_state.current_bank == "Basic" else f"ADVANCED|{f}"
-                att_data = get_attempt_data(st.session_state.current_user, test_k)
+                att_data = attempts_map.get(test_k, {'allowed': 5, 'used': 0})
                 used, allowed = att_data['used'], att_data['allowed']
                 c1, c2 = st.columns([3, 1])
                 c1.markdown(f"<h4 style='margin:0; font-weight:700;'>📄 {os.path.basename(f)[:-4]}</h4>", unsafe_allow_html=True)
                 c1.markdown(f"<span style='font-size:0.85rem; font-weight:600; opacity:0.8;'>📁 {(os.path.dirname(f) or 'Root').replace('/',' / ')} &middot; Attempts: {used}/{allowed}</span>", unsafe_allow_html=True)
                 if allowed - used > 0:
                     if c2.button("Start Assessment", key=f"ld_{test_k}", type="primary", use_container_width=True):
-                        with st.spinner("Configuring Engine..."): time.sleep(0.3); load_quiz(f); st.rerun()
+                        with st.spinner("Configuring Engine..."): 
+                            time.sleep(0.3)
+                            load_quiz(f)
+                            st.rerun()
                 else:
                     c2.button("Limit Reached", key=f"lm_{test_k}", disabled=True, use_container_width=True)
 
@@ -1249,12 +1329,7 @@ def render_dashboard_performance():
     st.markdown("<h2 style='font-weight:800;'>📈 Performance Analytics</h2>", unsafe_allow_html=True)
     st.write("---")
     
-    user_fb = ""
-    try:
-        fb_res = supabase.table('user_feedback').select('feedback').eq('username', st.session_state.current_user).execute()
-        if fb_res.data:
-            user_fb = fb_res.data[0]['feedback']
-    except Exception as e: pass
+    user_fb = get_user_feedback_cached(st.session_state.current_user)
 
     if user_fb:
         st.markdown(f"""
@@ -1323,18 +1398,15 @@ def render_dashboard_ask_query():
                             "status": "Pending", 
                             "reply": ""
                         }).execute()
+                        get_user_queries_cached.clear()
                         st.toast("Submitted Successfully!", icon="✅"); time.sleep(0.5); st.rerun()
                     except Exception as e:
-                        st.error(f"Error submitting query: {e}")
+                        logger.error(f"Error submitting query: {e}")
+                        st.error("Failed to submit query.")
                     
     st.markdown("#### Your Query History")
-    
-    try:
-        res = supabase.table('user_queries').select('*').eq('username', st.session_state.current_user).execute()
-        my_qs = sorted(res.data, key=lambda x: x.get('datetime', ''))
-    except Exception as e:
-        st.error(f"Failed to fetch your queries: {e}")
-        my_qs = []
+    queries = get_user_queries_cached()
+    my_qs = [q for q in queries if q.get('username') == st.session_state.current_user]
         
     if not my_qs: st.info("No queries found.")
     else:
@@ -1502,7 +1574,6 @@ def render_exam():
             else: act_cols[3].button("Next", type="primary", on_click=nav_next, use_container_width=True)
 
 def render_result():
-    # FIX: Display Supabase Database Errors if the insertion failed during submission
     if st.session_state.get('db_save_error'):
         st.error(f"⚠️ Critical Database Error: Could not save your result. Error details: {st.session_state.db_save_error}")
         st.warning("Admin Hint: Go to Supabase -> Table Editor -> 'exam_history'. Make sure **Row Level Security (RLS)** is Disabled, and all columns exist with exact names/types.")
