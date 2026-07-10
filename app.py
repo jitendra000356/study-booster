@@ -37,7 +37,7 @@ if not os.path.exists(SESSION_FOLDER):
 DEFAULT_STRUCTURE = {
     "Science": ["Physics", "Chemistry", "Biology", "Environment"],
     "Arts": ["History", "Polity", "Geography", "Economics"],
-    "Statistics": []
+    "Statistics": [],
     "Current affairs": []
 }
 
