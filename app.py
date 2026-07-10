@@ -9,6 +9,19 @@ import json
 import pickle
 import uuid
 import math
+from supabase import create_client, Client  # <-- NAYA IMPORT
+
+# ==========================================
+# 0. DATABASE CONNECTION SETUP
+# ==========================================
+@st.cache_resource
+def init_connection():
+    # secrets.toml se keys fetch karna
+    url = st.secrets["SUPABASE_URL"]
+    key = st.secrets["SUPABASE_KEY"]
+    return create_client(url, key)
+
+supabase: Client = init_connection()
 
 # ==========================================
 # 1. CONFIGURATION & CONSTANTS
@@ -75,19 +88,41 @@ ALLOWED_USERS = {
 # ==========================================
 
 def get_all_users():
-    if not os.path.exists(USERS_FILE):
-        with open(USERS_FILE, 'w') as f:
-            json.dump(ALLOWED_USERS, f, indent=4)
-        return ALLOWED_USERS
-    with open(USERS_FILE, 'r') as f:
-        try:
-            return json.load(f)
-        except:
-            return ALLOWED_USERS
+    try:
+        # Supabase database se users table ka data laana
+        response = supabase.table('users').select("*").execute()
+        
+        # Purane dictionary format mein convert karna taaki aapka login system break na ho
+        users_dict = {}
+        for row in response.data:
+            users_dict[row['username']] = row['password']
+            
+        # Agar table khali hai, toh kam se kam ek Admin account default de do
+        if not users_dict:
+            return {"Jitendra (Admin)": "Admin@1996"}
+            
+        return users_dict
+    except Exception as e:
+        st.error(f"Database Connection Error: {e}")
+        return {"Jitendra (Admin)": "Admin@1996"} # Fallback
 
-def save_users(users):
-    with open(USERS_FILE, 'w') as f:
-        json.dump(users, f, indent=4)
+def add_new_user_to_db(username, password):
+    # Naya user database me save karne ke liye
+    try:
+        data = {"username": username, "password": password, "role": "Student"}
+        supabase.table('users').insert(data).execute()
+        return True
+    except Exception as e:
+        st.error(f"Error adding user: {e}")
+        return False
+
+def delete_user_from_db(username):
+    # User delete karne ke liye
+    try:
+        supabase.table('users').delete().eq('username', username).execute()
+        return True
+    except:
+        return False
 
 def load_history():
     if not os.path.exists(HISTORY_FILE):
@@ -1253,18 +1288,30 @@ def render_admin():
             new_u = st.text_input("New Username")
             new_p = st.text_input("Password", type="password")
             if st.button("Create Account", type="primary"):
-                if new_u in users: st.error("Exists!")
-                elif new_u and new_p: users[new_u] = new_p; save_users(users); st.rerun()
+                if new_u in users: 
+                    st.error("User Already Exists!")
+                elif new_u and new_p: 
+                    # NAYA CLOUD FUNCTION CALL KIYA
+                    if add_new_user_to_db(new_u, new_p):
+                        st.toast("Account Created in Cloud Database!", icon="✅")
+                        time.sleep(1)
+                        st.rerun()
         with t2:
             del_u = st.selectbox("Account to Delete", [u for u in users if "Admin" not in u])
             cf_del = st.checkbox("Confirm deletion")
             if st.button("Delete Account", type="primary") and cf_del and del_u:
-                del users[del_u]; save_users(users); st.rerun()
+                # NAYA CLOUD FUNCTION CALL KIYA
+                if delete_user_from_db(del_u):
+                    st.toast("User Deleted from Database!", icon="✅")
+                    time.sleep(1)
+                    st.rerun()
         with t3:
             ch_u = st.selectbox("Target Account", list(users.keys()))
             ch_p = st.text_input("New Secure Password", type="password")
             if st.button("Reset Password", type="primary") and ch_p:
-                users[ch_u] = ch_p; save_users(users); st.toast("Reset!", icon="✅")
+                # Password update in cloud
+                supabase.table('users').update({"password": ch_p}).eq("username", ch_u).execute()
+                st.toast("Password Reset Successfully!", icon="✅")
 
     # Alphabetical Order: 6. User Performance Reports
     with st.expander("📊 User Performance Reports", expanded=False):
