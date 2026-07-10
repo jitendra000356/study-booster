@@ -783,8 +783,12 @@ def inject_custom_css():
         }}
         div.stButton > button[kind="primary"] * {{ color: white !important; }}
         div.stButton > button[kind="primary"]:hover:not(:disabled) {{ 
-            box-shadow: 0 8px 20px rgba(79, 70, 229, 0.4); transform: translateY(-2px); 
+            background: linear-gradient(135deg, var(--sb-primary-dark) 0%, #4f46e5 100%) !important;
+            color: #ffffff !important;
+            border-color: transparent !important;
+            box-shadow: 0 8px 20px rgba(67, 56, 202, 0.38); transform: translateY(-2px); 
         }}
+        div.stButton > button[kind="primary"]:hover:not(:disabled) * {{ color: #ffffff !important; }}
         
         .metric-card {{
             padding: 1.25rem; border: 1px solid #e2e8f0; border-top: 4px solid var(--metric-accent, #4f46e5);
@@ -802,6 +806,32 @@ def inject_custom_css():
         .metric-red {{ --metric-accent: #ef4444; }}
         .metric-amber {{ --metric-accent: #f59e0b; }}
         .metric-purple {{ --metric-accent: #8b5cf6; }}
+
+        /* Assessment list contrast */
+        .available-tests-title, .assessment-title {{ color: #0f172a !important; }}
+        .assessment-meta {{ color: #475569 !important; }}
+        @media (prefers-color-scheme: dark) {{
+            .available-tests-title, .assessment-title {{ color: #f8fafc !important; }}
+            .assessment-meta {{ color: #cbd5e1 !important; }}
+        }}
+
+        /* Compact live-assessment controls */
+        .palette-title {{
+            margin: 0 0 0.5rem !important;
+            color: #0f172a !important;
+            font-size: 0.9rem;
+            font-weight: 800;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+        }}
+        div[data-testid="stVerticalBlockBorderWrapper"]:has(.palette-title) {{
+            border-color: rgba(148, 163, 184, 0.45) !important;
+            box-shadow: 0 5px 14px -10px rgba(15, 23, 42, 0.32) !important;
+        }}
+        div[data-testid="stVerticalBlockBorderWrapper"]:has(.palette-title) div.stButton > button {{
+            min-height: 2.4rem;
+            font-size: 0.9rem;
+        }}
         
         /* Pre-exam motivational banner */
         .exam-motivation-banner {{
@@ -910,14 +940,14 @@ def render_visual_timer():
         <style>
             body {{ margin:0; padding:0; font-family: Inter, sans-serif; background: transparent; }}
             .timer-box {{
-                box-sizing: border-box; min-height: 55px; padding: 10px;
-                border: 2px solid #fecaca; border-radius: 12px;
+                box-sizing: border-box; min-height: 44px; padding: 7px 10px;
+                border: 1px solid #fecaca; border-radius: 10px;
                 background: linear-gradient(135deg, #fff5f5, #fff1f2);
-                color: #e11d48; font-size: 22px; font-weight: 800; text-align: center;
+                color: #e11d48; font-size: 18px; font-weight: 800; text-align: center;
                 display: flex; align-items: center; justify-content: center; gap: 8px;
-                box-shadow: 0 4px 6px rgba(225, 29, 72, 0.1);
+                box-shadow: 0 3px 8px rgba(225, 29, 72, 0.08);
             }}
-            .no-timer {{ background: #f0f9ff; border-color: #bae6fd; color: #0284c7; font-size: 16px; }}
+            .no-timer {{ background: #f0f9ff; border-color: #bae6fd; color: #0284c7; font-size: 14px; }}
         </style>
     </head>
     <body>
@@ -944,7 +974,7 @@ def render_visual_timer():
     </body>
     </html>
     """
-    components.html(html_code, height=75)
+    components.html(html_code, height=55)
 
 # ==========================================
 # 6. PAGE RENDERING FUNCTIONS
@@ -1229,7 +1259,7 @@ def render_admin():
                 users[ch_u] = ch_p; save_users(users); st.toast("Reset!", icon="✅")
 
 def render_dashboard_practice():
-    st.markdown("<h3 style='color:#0f172a; margin-bottom:15px;'>📋 Available Test Series</h3>", unsafe_allow_html=True)
+    st.markdown("<h3 class='available-tests-title' style='margin-bottom:15px;'>📋 Available Test Series</h3>", unsafe_allow_html=True)
     st.session_state.current_bank = st.radio("Question Bank", ["Basic", "Advanced"], horizontal=True, label_visibility="collapsed")
     
     active_base = CSV_FOLDER if st.session_state.current_bank == "Basic" else ADVANCED_CSV_FOLDER
@@ -1258,8 +1288,8 @@ def render_dashboard_practice():
                 att_data = get_attempt_data(st.session_state.current_user, test_k)
                 used, allowed = att_data['used'], att_data['allowed']
                 c1, c2 = st.columns([3, 1])
-                c1.markdown(f"<h4 style='margin:0; font-weight:700; color:#1e293b;'>📄 {os.path.basename(f)[:-4]}</h4>", unsafe_allow_html=True)
-                c1.markdown(f"<span style='font-size:0.85rem; color:#64748b; font-weight:600;'>📁 {(os.path.dirname(f) or 'Root').replace('/',' / ')} &middot; Attempts: {used}/{allowed}</span>", unsafe_allow_html=True)
+                c1.markdown(f"<h4 class='assessment-title' style='margin:0; font-weight:700;'>📄 {os.path.basename(f)[:-4]}</h4>", unsafe_allow_html=True)
+                c1.markdown(f"<span class='assessment-meta' style='font-size:0.85rem; font-weight:600;'>📁 {(os.path.dirname(f) or 'Root').replace('/',' / ')} &middot; Attempts: {used}/{allowed}</span>", unsafe_allow_html=True)
                 if allowed - used > 0:
                     if c2.button("Start Assessment", key=f"ld_{test_k}", type="primary", use_container_width=True):
                         with st.spinner("Configuring Engine..."): time.sleep(0.3); load_quiz(f); st.rerun()
@@ -1440,26 +1470,27 @@ def render_exam():
     not_visit_count = total_q - (ans_count + ans_marked_count + marked_count + not_ans_count)
             
     with col_pal:
-        st.markdown("<p class='palette-title'>Exam Controls & Timer</p>", unsafe_allow_html=True)
-        render_visual_timer()
-        st.write("<div style='margin-top:10px;'></div>", unsafe_allow_html=True)
-        st.button("⏸ Pause Exam", type="secondary", on_click=pause_exam, use_container_width=True)
-        
-        udisp = st.session_state.current_user.split()[0]
-        html_legend = f"""
-        <div style="background:#fff; padding:15px; border:1px solid #e2e8f0; border-radius:12px; margin:15px 0; box-shadow:0 4px 6px -1px rgba(0,0,0,0.03);">
-        <div style="display:flex; align-items:center; gap:10px; margin-bottom:15px;">
-        <div style="width:34px; height:34px; background:linear-gradient(135deg, #4f46e5, #6366f1); color:white; border-radius:50%; display:flex; justify-content:center; align-items:center; font-weight:bold;">{udisp[0].upper()}</div>
-        <span style="font-weight:700; color:#0f172a; font-size:15px;">{udisp}'s Session</span>
-        </div>
-        <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px 8px; font-size:11px; color:#475569;">
-        <div style="display:flex; align-items:center; gap:6px;"><div style="width:20px; height:20px; background:#16a34a; color:white; border-radius:6px 6px 0 0; display:flex; align-items:center; justify-content:center; font-weight:bold;">{ans_count}</div><span style="font-weight:600;">Answered</span></div>
-        <div style="display:flex; align-items:center; gap:6px;"><div style="width:20px; height:20px; background:#7c3aed; color:white; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:bold;">{marked_count}</div><span style="font-weight:600;">Marked</span></div>
-        <div style="display:flex; align-items:center; gap:6px;"><div style="width:20px; height:20px; background:#fff; border:1px solid #cbd5e1; color:#334155; border-radius:6px; display:flex; align-items:center; justify-content:center; font-weight:bold;">{not_visit_count}</div><span style="font-weight:600;">Not Visited</span></div>
-        <div style="display:flex; align-items:center; gap:6px;"><div style="width:20px; height:20px; background:#ef4444; color:white; border-radius:0 0 6px 6px; display:flex; align-items:center; justify-content:center; font-weight:bold;">{not_ans_count}</div><span style="font-weight:600;">Not Answered</span></div>
-        <div style="display:flex; align-items:center; gap:6px; grid-column:span 2;"><div style="width:20px; height:20px; background:#7c3aed; color:white; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:bold; position:relative;">{ans_marked_count}<div style="position:absolute; bottom:-2px; right:-2px; width:8px; height:8px; background:#16a34a; border-radius:50%; border:1px solid white;"></div></div><span style="font-weight:600;">Marked and Answered</span></div>
-        </div></div>"""
-        st.markdown(html_legend, unsafe_allow_html=True)
+        with st.container(border=True):
+            st.markdown("<p class='palette-title'>Exam Controls & Timer</p>", unsafe_allow_html=True)
+            render_visual_timer()
+            st.write("<div style='margin-top:6px;'></div>", unsafe_allow_html=True)
+            st.button("⏸ Pause Exam", type="secondary", on_click=pause_exam, use_container_width=True)
+            
+            udisp = st.session_state.current_user.split()[0]
+            html_legend = f"""
+            <div style="background:#fff; padding:10px; border:1px solid #e2e8f0; border-radius:10px; margin:9px 0; box-shadow:0 3px 8px -4px rgba(0,0,0,0.08);">
+            <div style="display:flex; align-items:center; gap:8px; margin-bottom:9px;">
+            <div style="width:30px; height:30px; background:linear-gradient(135deg, #4f46e5, #6366f1); color:white; border-radius:50%; display:flex; justify-content:center; align-items:center; font-weight:bold;">{udisp[0].upper()}</div>
+            <span style="font-weight:700; color:#0f172a; font-size:14px;">{udisp}'s Session</span>
+            </div>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:7px 6px; font-size:11px; color:#475569;">
+            <div style="display:flex; align-items:center; gap:5px;"><div style="width:19px; height:19px; background:#16a34a; color:white; border-radius:6px 6px 0 0; display:flex; align-items:center; justify-content:center; font-weight:bold;">{ans_count}</div><span style="font-weight:600;">Answered</span></div>
+            <div style="display:flex; align-items:center; gap:5px;"><div style="width:19px; height:19px; background:#7c3aed; color:white; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:bold;">{marked_count}</div><span style="font-weight:600;">Marked</span></div>
+            <div style="display:flex; align-items:center; gap:5px;"><div style="width:19px; height:19px; background:#fff; border:1px solid #cbd5e1; color:#334155; border-radius:6px; display:flex; align-items:center; justify-content:center; font-weight:bold;">{not_visit_count}</div><span style="font-weight:600;">Not Visited</span></div>
+            <div style="display:flex; align-items:center; gap:5px;"><div style="width:19px; height:19px; background:#ef4444; color:white; border-radius:0 0 6px 6px; display:flex; align-items:center; justify-content:center; font-weight:bold;">{not_ans_count}</div><span style="font-weight:600;">Not Answered</span></div>
+            <div style="display:flex; align-items:center; gap:5px; grid-column:span 2;"><div style="width:19px; height:19px; background:#7c3aed; color:white; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:bold; position:relative;">{ans_marked_count}<div style="position:absolute; bottom:-2px; right:-2px; width:8px; height:8px; background:#16a34a; border-radius:50%; border:1px solid white;"></div></div><span style="font-weight:600;">Marked and Answered</span></div>
+            </div></div>"""
+            st.markdown(html_legend, unsafe_allow_html=True)
         st.markdown(f"<div style='background:linear-gradient(90deg, #eff6ff, #dbeafe); padding:10px; font-weight:800; color:#1e40af; font-size:11px; text-transform:uppercase; border-radius:8px; margin-bottom:12px; text-align:center;'>SECTION: {st.session_state.topic}</div>", unsafe_allow_html=True)
 
         with st.expander("System Engine", expanded=False):
@@ -1516,33 +1547,33 @@ def render_exam():
     with col_main:
         st.markdown(f"<p class='exam-kicker'>Live Assessment &middot; {st.session_state.topic}</p>", unsafe_allow_html=True)
         st.progress((q_idx + 1) / total_q)
-        
-        raw_q = q_data['q']
-        clean_q = re.sub(r'^[Qq]?(?:uestion)?\s*\d+[\.\)]\s*', '', raw_q)
-        st.markdown(f"""
-            <section class="question-card">
-                <span class="question-card__number">Question {q_idx + 1} of {total_q}</span>
-                <p class="question-card__text">{clean_q}</p>
-            </section>
-            """, unsafe_allow_html=True)
-        
-        if q_data.get('type') == 'match':
-            saved_ans = st.session_state.user_answers.get(q_idx, {})
-            m_col1, m_col2 = st.columns(2)
-            m_col1.markdown("<div style='color:#64748b; font-weight:800; font-size:0.85rem; text-transform:uppercase; border-bottom:2px solid #e2e8f0; padding-bottom:8px;'>Column A (Fixed)</div>", unsafe_allow_html=True)
-            m_col2.markdown("<div style='color:#64748b; font-weight:800; font-size:0.85rem; text-transform:uppercase; border-bottom:2px solid #e2e8f0; padding-bottom:8px;'>Column B (Select Target)</div>", unsafe_allow_html=True)
-            for l_item in q_data['left']:
-                r_c1, r_c2 = st.columns(2)
-                r_c1.markdown(f"<div style='padding-top:10px; font-weight:650; font-size:1.1rem; color:#0f172a;'>{l_item}</div>", unsafe_allow_html=True)
-                opts = ["-- Select Option --"] + q_data['options']
-                idx = opts.index(saved_ans.get(l_item, "-- Select Option --")) if saved_ans.get(l_item) in opts else 0
-                r_c2.selectbox("Match Target", opts, index=idx, key=f"match_{q_idx}_{l_item}", on_change=on_match_change, args=(q_idx, q_data['left']), label_visibility="collapsed")
-        else:
-            saved_ans = st.session_state.user_answers.get(q_idx)
-            idx = q_data['options'].index(saved_ans) if saved_ans in q_data['options'] else None
-            st.radio("Options:", options=q_data['options'], index=idx, key=f"radio_ans_{q_idx}", on_change=on_radio_change, args=(q_idx,), label_visibility="collapsed")
+        with st.container(height=460, border=False):
+            raw_q = q_data['q']
+            clean_q = re.sub(r'^[Qq]?(?:uestion)?\s*\d+[\.\)]\s*', '', raw_q)
+            st.markdown(f"""
+                <section class="question-card">
+                    <span class="question-card__number">Question {q_idx + 1} of {total_q}</span>
+                    <p class="question-card__text">{clean_q}</p>
+                </section>
+                """, unsafe_allow_html=True)
             
-        st.write("<br><br>", unsafe_allow_html=True)
+            if q_data.get('type') == 'match':
+                saved_ans = st.session_state.user_answers.get(q_idx, {})
+                m_col1, m_col2 = st.columns(2)
+                m_col1.markdown("<div style='color:#64748b; font-weight:800; font-size:0.85rem; text-transform:uppercase; border-bottom:2px solid #e2e8f0; padding-bottom:8px;'>Column A (Fixed)</div>", unsafe_allow_html=True)
+                m_col2.markdown("<div style='color:#64748b; font-weight:800; font-size:0.85rem; text-transform:uppercase; border-bottom:2px solid #e2e8f0; padding-bottom:8px;'>Column B (Select Target)</div>", unsafe_allow_html=True)
+                for l_item in q_data['left']:
+                    r_c1, r_c2 = st.columns(2)
+                    r_c1.markdown(f"<div style='padding-top:10px; font-weight:650; font-size:1.1rem; color:#0f172a;'>{l_item}</div>", unsafe_allow_html=True)
+                    opts = ["-- Select Option --"] + q_data['options']
+                    idx = opts.index(saved_ans.get(l_item, "-- Select Option --")) if saved_ans.get(l_item) in opts else 0
+                    r_c2.selectbox("Match Target", opts, index=idx, key=f"match_{q_idx}_{l_item}", on_change=on_match_change, args=(q_idx, q_data['left']), label_visibility="collapsed")
+            else:
+                saved_ans = st.session_state.user_answers.get(q_idx)
+                idx = q_data['options'].index(saved_ans) if saved_ans in q_data['options'] else None
+                st.radio("Options:", options=q_data['options'], index=idx, key=f"radio_ans_{q_idx}", on_change=on_radio_change, args=(q_idx,), label_visibility="collapsed")
+        
+        st.write("<div style='height:0.75rem;'></div>", unsafe_allow_html=True)
         b_col1, b_col2, b_col3, b_col4 = st.columns([1.5, 1.5, 2.5, 1.5])
         b_col1.button("⏪ Previous", on_click=nav_prev, use_container_width=True)
         b_col2.button("🧹 Clear", on_click=clear_answer, args=(q_idx,), use_container_width=True)
