@@ -75,10 +75,10 @@ def check_and_create_default_folders():
         return
         
     try:
-        # Check if the basic 'Science' folder exists
-        res = supabase.table('question_banks').select('id').eq('folder_path', 'Science').execute()
+        # Check if the table is completely empty to prevent recreating defaults if renamed
+        res = supabase.table('question_banks').select('id').limit(1).execute()
         if not res.data:
-            # If not found, generate all default folders for both banks
+            # If completely empty, generate all default folders for both banks
             for bank_type in ["Basic", "Advanced"]:
                 for root_cat, sub_cats in DEFAULT_STRUCTURE.items():
                     # Create root category folder
@@ -140,7 +140,7 @@ def get_supabase_history(username):
         sorted_data = sorted(response.data, key=lambda x: x.get('datetime', ''))
 
         for row in sorted_data:
-            q_details = row.get('q_details', '[]')
+            q_details = row.get('q_details', [])
             if isinstance(q_details, str):
                 try: q_details = json.loads(q_details)
                 except: q_details = []
@@ -182,7 +182,7 @@ def get_all_supabase_history():
             if username not in history_dict:
                 history_dict[username] = []
             
-            q_details = row.get('q_details', '[]')
+            q_details = row.get('q_details', [])
             if isinstance(q_details, str):
                 try: q_details = json.loads(q_details)
                 except: q_details = []
@@ -394,7 +394,9 @@ def record_detailed_attempt(user, test_key, original_file):
             "negative_marks": attempt_data["negative_marks"],
             "percentage": attempt_data["percentage"],
             "datetime": attempt_data["datetime"],
-            "q_details": json.dumps(attempt_data["q_details"]) 
+            # BUG 1 FIX: Passed directly as a list/dict object.
+            # Supabase handles jsonb serialization natively. Passing json.dumps() causes silent DB failures.
+            "q_details": attempt_data["q_details"]
         }
         supabase.table("test_results").insert(supabase_data).execute()
     except Exception as e:
@@ -429,7 +431,8 @@ def init_session():
         'active_page': "Dashboard", 'dashboard_tab': "Practice", 'is_paused': False,
         'current_test_filename': "", 'attempt_recorded': False, 'admin_current_path': "",
         'sid': "", 'current_bank': "Basic", 'last_admin_bank': "Basic",
-        'query_input': "", 'history_view_index': -1, 'folders_checked': False
+        'query_input': "", 'history_view_index': -1, 'folders_checked': False,
+        'editing_item': None
     }
 
     query_params = st.query_params
@@ -894,20 +897,21 @@ def render_admin():
     with st.expander("📁 Question Bank Management (Cloud DB)", expanded=False):
         admin_bank = st.radio("Select Question Bank", ["Basic", "Advanced"], horizontal=True, key="admin_bank_radio")
         if st.session_state.get('last_admin_bank') != admin_bank:
-            st.session_state.admin_current_path = "Root"; st.session_state.last_admin_bank = admin_bank
+            st.session_state.admin_current_path = ""; st.session_state.last_admin_bank = admin_bank
         
-        current_path = st.session_state.get('admin_current_path') or 'Root'
-        st.markdown(f"**Current Directory:** ` {current_path.replace('/', ' / ')} `")
+        current_path = st.session_state.get('admin_current_path') or ''
+        display_path = current_path.replace('/', ' / ') if current_path else 'Root'
+        st.markdown(f"**Current Directory:** ` {display_path} `")
         
         c_up, c_newf, c_upld = st.columns(3)
         with c_up:
-            if current_path != 'Root': 
+            if current_path != '': 
                 st.button("⬅️ Back / Up", on_click=nav_admin_up, use_container_width=True)
         with c_newf:
             new_f = st.text_input("New Folder", key="new_f_input", label_visibility="collapsed", placeholder="Folder Name")
             if st.button("Create Folder", use_container_width=True):
                 if new_f:
-                    new_fp = new_f.strip() if current_path == 'Root' else f"{current_path}/{new_f.strip()}"
+                    new_fp = new_f.strip() if current_path == '' else f"{current_path}/{new_f.strip()}"
                     supabase.table('question_banks').insert({
                         'bank_type': admin_bank, 'folder_path': new_fp, 'file_name': '.keep', 'csv_data': ''
                     }).execute()
@@ -918,7 +922,7 @@ def render_admin():
                 with st.spinner("Uploading to Database..."):
                     content = uploaded_file.getvalue().decode('utf-8-sig', errors='ignore')
                     supabase.table('question_banks').insert({
-                        'bank_type': admin_bank, 'folder_path': current_path, 
+                        'bank_type': admin_bank, 'folder_path': current_path if current_path != '' else 'Root', 
                         'file_name': uploaded_file.name, 'csv_data': content
                     }).execute()
                     st.toast("Uploaded securely to Cloud!", icon="✅"); time.sleep(0.5); st.rerun()
@@ -934,7 +938,7 @@ def render_admin():
         
         for r in records:
             fp = r['folder_path']
-            if current_path == 'Root':
+            if current_path == '':
                 if fp == 'Root':
                     if r['file_name'] != '.keep': files.append(r)
                 else:
@@ -960,8 +964,8 @@ def render_admin():
                     new_fn = ec1.text_input("New Name", value=folder, key=f"in_{edit_key}", label_visibility="collapsed")
                     if ec2.button("Save", key=f"save_{edit_key}", type="primary", use_container_width=True):
                         if new_fn and new_fn.strip() != folder:
-                            old_prefix = folder if current_path == 'Root' else f"{current_path}/{folder}"
-                            new_prefix = new_fn.strip() if current_path == 'Root' else f"{current_path}/{new_fn.strip()}"
+                            old_prefix = folder if current_path == '' else f"{current_path}/{folder}"
+                            new_prefix = new_fn.strip() if current_path == '' else f"{current_path}/{new_fn.strip()}"
                             for r in records:
                                 rfp = r['folder_path']
                                 if rfp == old_prefix:
@@ -976,12 +980,12 @@ def render_admin():
                         st.rerun()
                 else:
                     fc1, fc2, fc3 = st.columns([8, 2, 2])
-                    fc1.button(f"📁 {folder}", key=f"nav_{current_path}_{folder}", on_click=nav_admin_down, args=(f"{folder}" if current_path=='Root' else f"{current_path}/{folder}",), use_container_width=True)
+                    fc1.button(f"📁 {folder}", key=f"nav_{current_path}_{folder}", on_click=nav_admin_down, args=(folder,), use_container_width=True)
                     if fc2.button("Rename", key=f"rn_btn_{current_path}_{folder}", use_container_width=True):
                         st.session_state.editing_item = edit_key
                         st.rerun()
                     if fc3.button("Delete", key=f"del_f_{current_path}_{folder}", use_container_width=True):
-                        old_prefix = folder if current_path == 'Root' else f"{current_path}/{folder}"
+                        old_prefix = folder if current_path == '' else f"{current_path}/{folder}"
                         for r in records:
                             rfp = r['folder_path']
                             if rfp == old_prefix or rfp.startswith(old_prefix + '/'):
