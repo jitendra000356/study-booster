@@ -133,7 +133,7 @@ def delete_user_from_db(username):
 def get_supabase_history(username):
     """Fetches test history from Supabase for a specific user"""
     try:
-        response = supabase.table('test_results').select("*").eq('username', username).execute()
+        response = supabase.table('exam_history').select("*").eq('username', username).execute()
         history = []
         
         # Sort by datetime sequentially to match old graph progression logic
@@ -171,7 +171,7 @@ def get_supabase_history(username):
 def get_all_supabase_history():
     """Fetches all test histories from Supabase for Admin reporting"""
     try:
-        response = supabase.table('test_results').select("*").execute()
+        response = supabase.table('exam_history').select("*").execute()
         history_dict = {}
         
         sorted_data = sorted(response.data, key=lambda x: x.get('datetime', ''))
@@ -398,7 +398,7 @@ def record_detailed_attempt(user, test_key, original_file):
             # BUG 1 FIX: Passed directly as a list/dict object.
             "q_details": attempt_data["q_details"]
         }
-        supabase.table("test_results").insert(supabase_data).execute()
+        supabase.table("exam_history").insert(supabase_data).execute()
     except Exception as e:
         st.session_state.db_save_error = str(e)
         print(f"Failed to sync result to Supabase: {e}")
@@ -413,7 +413,7 @@ def record_attempt_usage():
             record_detailed_attempt(user, test_key, original_file)
             
             try:
-                res = supabase.table('test_results').select('id').eq('username', user).execute()
+                res = supabase.table('exam_history').select('id').eq('username', user).execute()
                 st.session_state.history_view_index = len(res.data) - 1
             except:
                 st.session_state.history_view_index = 0
@@ -1505,7 +1505,7 @@ def render_result():
     # FIX: Display Supabase Database Errors if the insertion failed during submission
     if st.session_state.get('db_save_error'):
         st.error(f"⚠️ Critical Database Error: Could not save your result. Error details: {st.session_state.db_save_error}")
-        st.warning("Admin Hint: Go to Supabase -> Table Editor -> 'test_results'. Make sure **Row Level Security (RLS)** is Disabled, and all columns exist with exact names/types.")
+        st.warning("Admin Hint: Go to Supabase -> Table Editor -> 'exam_history'. Make sure **Row Level Security (RLS)** is Disabled, and all columns exist with exact names/types.")
         st.session_state.db_save_error = None # Clear error after showing
 
     history = get_supabase_history(st.session_state.current_user)
