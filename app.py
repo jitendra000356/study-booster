@@ -8,6 +8,7 @@ import re
 import json
 import pickle
 import uuid
+import math
 
 # ==========================================
 # 1. CONFIGURATION & CONSTANTS
@@ -651,7 +652,7 @@ def inject_custom_css():
             }}
             """
     except Exception:
-        bg_css = ".stApp { background-color: #f1f5f9; }"
+        bg_css = ".stApp { background-color: var(--background-color); }"
 
     st.markdown(f"""
         <style>
@@ -662,49 +663,40 @@ def inject_custom_css():
         :root {{
             --sb-primary: {UI_COLORS['primary']};
             --sb-primary-dark: {UI_COLORS['primary_dark']};
-            --sb-ink: {UI_COLORS['ink']};
-            --sb-muted: {UI_COLORS['muted']};
-            --sb-surface: {UI_COLORS['surface']};
-            --sb-border: {UI_COLORS['border']};
         }}
 
-        html, body, [class*="css"]  {{ font-family: 'Inter', sans-serif; }}
-        html {{ color-scheme: light dark; }}
-        .stApp {{ color: var(--sb-ink); }}
         header[data-testid="stHeader"] {{ background: transparent !important; }}
         
+        /* Relying on Streamlit's native theme variables to automatically handle light/dark mode perfectly */
         .block-container {{
             max-width: 1400px !important;
             padding: clamp(1rem, 3vw, 2.5rem) !important;
             margin: 1.5rem auto !important;
-            box-sizing: border-box;
-            min-height: calc(100vh - 3rem);
-            border: 1px solid rgba(226, 232, 240, 0.85);
+            min-height: calc(100vh - 4rem);
+            border: 1px solid rgba(128, 128, 128, 0.2);
             border-radius: 20px;
-            background: #ffffff !important;
-            box-shadow: 0 25px 50px -12px rgba(15, 23, 42, 0.15);
+            background-color: var(--background-color) !important;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.15);
             animation: fadeIn 0.4s ease-out forwards;
         }}
         @keyframes fadeIn {{ from {{ opacity: 0; transform: translateY(10px); }} to {{ opacity: 1; transform: translateY(0); }} }}
 
         /* EdTech Premium Sidebar */
         section[data-testid="stSidebar"] {{ 
-            background: #ffffff !important; 
-            border-right: 1px solid #e2e8f0; 
+            border-right: 1px solid rgba(128, 128, 128, 0.2); 
             box-shadow: 2px 0 20px rgba(0,0,0,0.03);
         }}
-        section[data-testid="stSidebar"] * {{ color: #334155 !important; }}
         
         .edtech-profile-card {{
-            background: linear-gradient(135deg, rgba(79, 70, 229, 0.05), rgba(79, 70, 229, 0.12));
-            border: 1px solid rgba(79, 70, 229, 0.2);
+            background: var(--secondary-background-color);
+            border: 1px solid rgba(128, 128, 128, 0.2);
             border-radius: 16px;
             padding: 1.25rem 1rem;
             margin: 0.5rem 0 1.5rem 0;
             display: flex;
             align-items: center;
             gap: 12px;
-            box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.05);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
         }}
         .edtech-profile-avatar {{
             width: 44px; height: 44px;
@@ -715,92 +707,50 @@ def inject_custom_css():
             font-weight: 800; font-size: 1.1rem;
             box-shadow: 0 4px 10px rgba(79, 70, 229, 0.3);
         }}
-        .edtech-profile-info strong {{ display: block; font-size: 0.95rem; font-weight: 700; color: #0f172a !important; line-height: 1.2; }}
-        .edtech-profile-info span {{ display: block; font-size: 0.75rem; font-weight: 600; color: #64748b !important; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 2px; }}
+        .edtech-profile-info strong {{ display: block; font-size: 0.95rem; font-weight: 700; line-height: 1.2; color: var(--text-color); }}
+        .edtech-profile-info span {{ display: block; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 2px; color: var(--text-color); opacity: 0.8;}}
 
-        section[data-testid="stSidebar"] div.stButton > button {{ 
-            background: transparent !important; border-color: transparent !important; 
-            color: #475569 !important; text-align: left !important; box-shadow: none !important; 
-            font-size: 0.95rem !important; padding: 0.6rem 0.8rem !important;
-            border-radius: 10px !important;
-            transition: all 0.2s ease;
-            font-weight: 600 !important;
+        /* Clean general buttons relying on Streamlit's robust default theme colors */
+        div.stButton > button {{
+            min-height: 2.8rem; border-radius: 12px; font-weight: 600; font-size: 0.95rem;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
         }}
-        section[data-testid="stSidebar"] div.stButton > button:hover:not(:disabled) {{ 
-            background: #f1f5f9 !important; color: #0f172a !important; transform: translateX(4px); 
+        div.stButton > button:hover:not(:disabled) {{
+            box-shadow: 0 6px 12px -2px rgba(0,0,0,0.05); transform: translateY(-1px);
         }}
-        .active-sidebar-btn {{
-            background: #eff6ff !important;
-            color: #2563eb !important;
-            border-left: 4px solid #2563eb !important;
-            border-radius: 0 10px 10px 0 !important;
+        div.stButton > button[kind="primary"] {{
+            border: none !important; background: linear-gradient(135deg, var(--sb-primary) 0%, #6366f1 100%) !important;
+            color: #ffffff !important; box-shadow: 0 4px 12px rgba(79, 70, 229, 0.25);
+        }}
+        div.stButton > button[kind="primary"] * {{ color: white !important; }}
+        div.stButton > button[kind="primary"]:hover:not(:disabled) {{ 
+            background: linear-gradient(135deg, var(--sb-primary-dark) 0%, #4f46e5 100%) !important;
+            box-shadow: 0 8px 20px rgba(67, 56, 202, 0.38); transform: translateY(-2px); 
         }}
 
         /* Shared page structure */
         .page-header {{
             margin: 0 0 2rem;
             padding: 1.75rem 2rem;
-            border: 1px solid rgba(226, 232, 240, 0.8);
+            border: 1px solid rgba(128, 128, 128, 0.2);
             border-radius: 16px;
-            background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+            background: var(--secondary-background-color);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
         }}
-        .page-header h1 {{
-            margin: 0 !important;
-            color: var(--sb-ink) !important;
-            font-size: clamp(1.75rem, 3.5vw, 2.5rem) !important;
-            letter-spacing: -0.025em;
-            line-height: 1.2;
-            font-weight: 800;
-        }}
-        .page-eyebrow {{
-            margin: 0 0 0.5rem !important;
-            color: var(--sb-primary) !important;
-            font-size: 0.85rem;
-            font-weight: 700;
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-        }}
-        .page-subtitle {{
-            margin: 0.5rem 0 0 !important;
-            color: var(--sb-muted) !important;
-            font-size: 1.05rem;
-            line-height: 1.5;
-        }}
-
-        /* Buttons and Cards */
-        div.stButton > button {{
-            min-height: 2.8rem; border-radius: 12px; font-weight: 600; font-size: 0.95rem;
-            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-            border: 1px solid #cbd5e1; background: #ffffff; color: #0f172a;
-        }}
-        div.stButton > button:hover:not(:disabled) {{
-            border-color: #93c5fd; background: #f8fafc;
-            box-shadow: 0 6px 12px -2px rgba(0,0,0,0.05); transform: translateY(-1px);
-        }}
-        div.stButton > button[kind="primary"] {{
-            border: none; background: linear-gradient(135deg, var(--sb-primary) 0%, #6366f1 100%);
-            color: #ffffff !important; box-shadow: 0 4px 12px rgba(79, 70, 229, 0.25);
-        }}
-        div.stButton > button[kind="primary"] * {{ color: white !important; }}
-        div.stButton > button[kind="primary"]:hover:not(:disabled) {{ 
-            background: linear-gradient(135deg, var(--sb-primary-dark) 0%, #4f46e5 100%) !important;
-            color: #ffffff !important;
-            border-color: transparent !important;
-            box-shadow: 0 8px 20px rgba(67, 56, 202, 0.38); transform: translateY(-2px); 
-        }}
-        div.stButton > button[kind="primary"]:hover:not(:disabled) * {{ color: #ffffff !important; }}
+        .page-header h1 {{ margin: 0 !important; color: var(--text-color) !important; font-size: clamp(1.75rem, 3.5vw, 2.5rem) !important; font-weight: 800; }}
+        .page-eyebrow {{ margin: 0 0 0.5rem !important; color: var(--sb-primary) !important; font-weight: 700; text-transform: uppercase; }}
+        .page-subtitle {{ margin: 0.5rem 0 0 !important; color: var(--text-color) !important; opacity: 0.8; font-size: 1.05rem; }}
         
         .metric-card {{
-            padding: 1.25rem; border: 1px solid #e2e8f0; border-top: 4px solid var(--metric-accent, #4f46e5);
-            border-radius: 16px; background: #ffffff;
+            padding: 1.25rem; border: 1px solid rgba(128, 128, 128, 0.2); border-top: 4px solid var(--metric-accent, #4f46e5);
+            border-radius: 16px; background: var(--secondary-background-color);
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.03);
             transition: all 0.25s ease;
         }}
         .metric-card:hover {{ transform: translateY(-4px); box-shadow: 0 12px 20px -5px rgba(0, 0, 0, 0.08); }}
-        .metric-card span {{ display: block; color: #64748b !important; font-size: 0.8rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; }}
-        .metric-card strong {{ display: block; margin-top: 0.4rem; color: #0f172a; font-size: clamp(1.4rem, 2vw, 1.8rem); font-weight: 800; }}
-        .metric-card p {{ margin: 0.5rem 0 0 !important; color: #64748b !important; font-size: 0.85rem; }}
+        .metric-card span {{ display: block; font-size: 0.8rem; font-weight: 700; text-transform: uppercase; color: var(--text-color) !important; opacity: 0.8; }}
+        .metric-card strong {{ display: block; margin-top: 0.4rem; font-size: clamp(1.4rem, 2vw, 1.8rem); font-weight: 800; color: var(--text-color) !important; }}
+        .metric-card p {{ margin: 0.5rem 0 0 !important; font-size: 0.85rem; color: var(--text-color) !important; opacity: 0.8; }}
         
         .metric-blue {{ --metric-accent: #3b82f6; }}
         .metric-green {{ --metric-accent: #10b981; }}
@@ -808,175 +758,42 @@ def inject_custom_css():
         .metric-amber {{ --metric-accent: #f59e0b; }}
         .metric-purple {{ --metric-accent: #8b5cf6; }}
 
-        /* Assessment list contrast */
-        .available-tests-title, .assessment-title {{ color: #0f172a !important; }}
-        .assessment-meta {{ color: #475569 !important; }}
-        @media (prefers-color-scheme: dark) {{
-            .available-tests-title, .assessment-title {{ color: #f8fafc !important; }}
-            .assessment-meta {{ color: #cbd5e1 !important; }}
-        }}
+        /* Legend box customized for native theme */
+        .legend-box {{ background: var(--secondary-background-color); padding: 10px; border: 1px solid rgba(128, 128, 128, 0.2); border-radius: 8px; margin: 6px 0; box-shadow: 0 2px 5px -2px rgba(0,0,0,0.05); }}
+        .legend-title {{ font-weight: 700; color: var(--text-color); font-size: 12px; }}
+        .legend-text {{ font-weight: 600; color: var(--text-color); opacity: 0.9; }}
 
         /* Compact live-assessment controls */
-        .palette-title {{
-            margin: 0 0 0.5rem !important;
-            color: #0f172a !important;
-            font-size: 0.9rem;
-            font-weight: 800;
-            letter-spacing: 0.04em;
-            text-transform: uppercase;
-        }}
-        div[data-testid="stVerticalBlockBorderWrapper"]:has(.palette-title) {{
-            border-color: rgba(148, 163, 184, 0.45) !important;
-            box-shadow: 0 5px 14px -10px rgba(15, 23, 42, 0.32) !important;
-        }}
-        div[data-testid="stVerticalBlockBorderWrapper"]:has(.palette-title) div.stButton > button {{
-            min-height: 2.4rem;
-            font-size: 0.9rem;
-        }}
-
-        /* Dark-mode contrast: keep every interactive surface readable without blur. */
-        @media (prefers-color-scheme: dark) {{
-            :root {{
-                --sb-ink: #f8fafc;
-                --sb-muted: #cbd5e1;
-                --sb-surface: #1e293b;
-                --sb-border: #475569;
-            }}
-            .stApp {{ background-color: #020617 !important; color: #e2e8f0 !important; }}
-            .block-container, [data-testid="stMainBlockContainer"] {{
-                background: #0f172a !important;
-                border-color: #334155 !important;
-                box-shadow: 0 18px 38px -18px rgba(0, 0, 0, 0.7) !important;
-            }}
-            section[data-testid="stSidebar"] {{
-                background: #111827 !important;
-                border-color: #334155 !important;
-            }}
-            section[data-testid="stSidebar"] * {{ color: #e2e8f0 !important; }}
-            .edtech-profile-card {{ background: #1e293b !important; border-color: #475569 !important; }}
-            .edtech-profile-info strong {{ color: #f8fafc !important; }}
-            .edtech-profile-info span {{ color: #cbd5e1 !important; }}
-            .page-header, .metric-card, div[data-testid="stVerticalBlockBorderWrapper"], div[data-testid="stAlert"] {{
-                background: #1e293b !important;
-                border-color: #475569 !important;
-            }}
-            .page-header h1, .metric-card strong, .palette-title {{ color: #f8fafc !important; }}
-            .page-subtitle, .metric-card span, .metric-card p {{ color: #cbd5e1 !important; }}
-            div.stButton > button {{
-                background: #1e293b !important;
-                border-color: #64748b !important;
-                color: #f8fafc !important;
-            }}
-            div.stButton > button:hover:not(:disabled) {{ background: #334155 !important; border-color: #94a3b8 !important; }}
-            div.stButton > button[kind="primary"], div.stButton > button[kind="primary"]:hover:not(:disabled) {{ color: #ffffff !important; }}
-            div[data-baseweb="input"], div[data-baseweb="select"] > div, textarea {{
-                background-color: #0f172a !important;
-                border-color: #64748b !important;
-                color: #f8fafc !important;
-            }}
-            div[data-baseweb="input"] input, div[data-baseweb="select"] *, textarea, label,
-            [data-testid="stWidgetLabel"] p, [data-testid="stCaptionContainer"], [data-testid="stMarkdownContainer"] p {{
-                color: #e2e8f0 !important;
-            }}
-            table, th, td {{ background: #1e293b !important; border-color: #475569 !important; color: #e2e8f0 !important; }}
-            .exam-session-summary {{ background: #1e293b !important; border-color: #475569 !important; }}
-            .exam-session-summary span {{ color: #e2e8f0 !important; }}
-            .exam-section-label {{ background: #172554 !important; color: #bfdbfe !important; }}
-        }}
+        .palette-title {{ margin: 0 0 0.5rem !important; color: var(--text-color) !important; font-size: 0.9rem; font-weight: 800; text-transform: uppercase; }}
+        div[data-testid="stVerticalBlockBorderWrapper"]:has(.palette-title) div.stButton > button {{ min-height: 2.4rem; font-size: 0.9rem; }}
         
         /* Pre-exam motivational banner */
         .exam-motivation-banner {{
-            position: relative;
-            overflow: hidden;
-            margin: 0 0 1.5rem;
+            position: relative; overflow: hidden; margin: 0 0 1.5rem;
             padding: clamp(1.5rem, 3vw, 2.25rem) clamp(1.25rem, 4vw, 3rem);
-            border: 1px solid rgba(129, 140, 248, 0.22);
-            border-radius: 16px;
-            background: linear-gradient(135deg, #eaf4ff 0%, #f4efff 52%, #eef6ff 100%);
-            box-shadow: 0 12px 28px -14px rgba(79, 70, 229, 0.28);
-            text-align: center;
-            animation: examBannerFadeIn 0.55s ease-out both;
-        }}
-        .exam-motivation-banner::before {{
-            content: '';
-            position: absolute;
-            inset: 0;
-            background: radial-gradient(circle at 12% 18%, rgba(255, 255, 255, 0.86), transparent 30%),
-                        radial-gradient(circle at 88% 85%, rgba(196, 181, 253, 0.28), transparent 32%);
-            pointer-events: none;
+            border: 1px solid rgba(128, 128, 128, 0.2); border-radius: 16px;
+            background: var(--secondary-background-color);
+            text-align: center; animation: examBannerFadeIn 0.55s ease-out both;
         }}
         .exam-motivation-content {{ position: relative; z-index: 1; max-width: 760px; margin: 0 auto; }}
-        .exam-motivation-banner h2 {{
-            margin: 0 !important;
-            color: #312e81 !important;
-            font-size: clamp(1.35rem, 3vw, 2rem) !important;
-            font-weight: 800;
-            letter-spacing: -0.02em;
-            line-height: 1.3;
-        }}
-        .exam-motivation-lines {{
-            display: grid;
-            gap: 0.2rem;
-            margin: 1rem 0 0 !important;
-            color: #334155 !important;
-            font-size: clamp(0.95rem, 2vw, 1.05rem);
-            font-weight: 600;
-            line-height: 1.45;
-        }}
-        .exam-motivation-note {{
-            margin: 1rem 0 0 !important;
-            color: #475569 !important;
-            font-size: 0.95rem;
-            font-weight: 500;
-            line-height: 1.55;
-        }}
-        .exam-motivation-closing {{
-            margin: 0.7rem 0 0 !important;
-            color: #4338ca !important;
-            font-size: 0.95rem;
-            font-weight: 700;
-            line-height: 1.5;
-        }}
+        .exam-motivation-banner h2 {{ margin: 0 !important; font-size: clamp(1.35rem, 3vw, 2rem) !important; font-weight: 800; color: var(--text-color) !important; }}
+        .exam-motivation-lines {{ display: grid; gap: 0.2rem; margin: 1rem 0 0 !important; font-size: clamp(0.95rem, 2vw, 1.05rem); font-weight: 600; color: var(--text-color) !important; }}
+        .exam-motivation-note {{ margin: 1rem 0 0 !important; font-size: 0.95rem; font-weight: 500; color: var(--text-color) !important; opacity: 0.9; }}
+        .exam-motivation-closing {{ margin: 0.7rem 0 0 !important; font-size: 0.95rem; font-weight: 700; color: var(--text-color) !important; }}
         .exam-motivation-footer {{ margin: 0.85rem 0 0 !important; font-size: 1.2rem; letter-spacing: 0.18em; }}
         .exam-banner-emoji {{
-            position: absolute;
-            z-index: 0;
-            font-size: clamp(1.15rem, 2.5vw, 1.6rem);
-            opacity: 0.7;
-            pointer-events: none;
-            animation: examEmojiFloat 4s ease-in-out infinite;
+            position: absolute; z-index: 0; font-size: clamp(1.15rem, 2.5vw, 1.6rem); opacity: 0.7;
+            pointer-events: none; animation: examEmojiFloat 4s ease-in-out infinite;
         }}
         .exam-banner-emoji-left {{ top: 17%; left: 5%; }}
         .exam-banner-emoji-right {{ right: 5%; bottom: 16%; animation-delay: -1.7s; }}
         @keyframes examBannerFadeIn {{ from {{ opacity: 0; transform: translateY(10px); }} to {{ opacity: 1; transform: translateY(0); }} }}
         @keyframes examEmojiFloat {{ 0%, 100% {{ transform: translateY(0); }} 50% {{ transform: translateY(-6px); }} }}
-
-        /* Custom Tabs Styling */
-        div[data-testid="stTabs"] button {{
-            font-size: 1.05rem; font-weight: 600; padding: 0.5rem 1rem;
-            transition: all 0.2s ease;
-        }}
-        
-        /* Alerts styling */
-        div[data-testid="stAlert"] {{
-            border-radius: 12px; border: none; border-left: 4px solid; 
-            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); background: #ffffff;
-        }}
         
         /* Result Top Colored Cards */
-        .res-correct {{ border-top-color: #16a34a !important; background: linear-gradient(to bottom, #f0fdf4, #ffffff) !important; }}
-        .res-incorrect {{ border-top-color: #dc2626 !important; background: linear-gradient(to bottom, #fef2f2, #ffffff) !important; }}
-        .res-unanswered {{ border-top-color: #d97706 !important; background: linear-gradient(to bottom, #fffbeb, #ffffff) !important; }}
-
-        @media (max-width: 768px) {{
-            .block-container {{ padding: 1rem !important; border-radius: 0; }}
-            .exam-motivation-banner {{ border-radius: 14px; }}
-            .exam-banner-emoji-left {{ left: 3%; }}
-            .exam-banner-emoji-right {{ right: 3%; }}
-        }}
-        @media (prefers-reduced-motion: reduce) {{
-            .exam-motivation-banner, .exam-banner-emoji {{ animation: none !important; }}
-        }}
+        .res-correct {{ border-top-color: #16a34a !important; }}
+        .res-incorrect {{ border-top-color: #dc2626 !important; }}
+        .res-unanswered {{ border-top-color: #d97706 !important; }}
         </style>
     """, unsafe_allow_html=True)
 
@@ -991,14 +808,18 @@ def render_visual_timer():
         <style>
             body {{ margin:0; padding:0; font-family: Inter, sans-serif; background: transparent; }}
             .timer-box {{
-                box-sizing: border-box; min-height: 44px; padding: 7px 10px;
-                border: 1px solid #fecaca; border-radius: 10px;
+                box-sizing: border-box; min-height: 38px; padding: 5px 8px;
+                border: 1px solid #fecaca; border-radius: 8px;
                 background: linear-gradient(135deg, #fff5f5, #fff1f2);
-                color: #e11d48; font-size: 18px; font-weight: 800; text-align: center;
+                color: #e11d48; font-size: 16px; font-weight: 800; text-align: center;
                 display: flex; align-items: center; justify-content: center; gap: 8px;
-                box-shadow: 0 3px 8px rgba(225, 29, 72, 0.08);
+                box-shadow: 0 2px 5px rgba(225, 29, 72, 0.05);
             }}
             .no-timer {{ background: #f0f9ff; border-color: #bae6fd; color: #0284c7; font-size: 14px; }}
+            @media (prefers-color-scheme: dark) {{
+                .timer-box {{ background: linear-gradient(135deg, #4c1d95, #312e81); border-color: #4338ca; color: #f8fafc; }}
+                .no-timer {{ background: #0f172a; border-color: #1e293b; color: #38bdf8; }}
+            }}
         </style>
     </head>
     <body>
@@ -1025,7 +846,7 @@ def render_visual_timer():
     </body>
     </html>
     """
-    components.html(html_code, height=55)
+    components.html(html_code, height=45)
 
 # ==========================================
 # 6. PAGE RENDERING FUNCTIONS
@@ -1037,8 +858,8 @@ def render_login():
     col1, col2, col3 = st.columns([1, 1.5, 1]) 
     with col2:
         with st.container(border=True):
-            st.markdown("<h1 style='text-align:center; color:#0f172a; font-weight:800; margin-bottom:0.2rem;'>Study Booster</h1>", unsafe_allow_html=True)
-            st.markdown("<p style='text-align:center; font-size:1rem; color:#64748b; margin-top:0;'>Your focused space for practice and progress.</p>", unsafe_allow_html=True)
+            st.markdown("<h1 style='text-align:center; font-weight:800; margin-bottom:0.2rem;'>Study Booster</h1>", unsafe_allow_html=True)
+            st.markdown("<p style='text-align:center; font-size:1rem; margin-top:0; opacity:0.8;'>Your focused space for practice and progress.</p>", unsafe_allow_html=True)
             st.divider()
             username = st.selectbox("👤 Select Profile", ["-- Select User --"] + list(users.keys()))
             pwd = st.text_input("🔑 Enter Passcode", type="password")
@@ -1117,7 +938,7 @@ def render_user_queries():
         st.error("Unauthorized access!")
         return
         
-    st.markdown("<h2 style='color:#0f172a; font-weight:800;'>Support Center & Queries</h2>", unsafe_allow_html=True)
+    st.markdown("<h2 style='font-weight:800;'>Support Center & Queries</h2>", unsafe_allow_html=True)
     st.write("---")
     
     queries = load_queries()
@@ -1140,10 +961,9 @@ def render_user_queries():
             q_status = q.get("status", "Pending")
             q_text = q.get("text", "")
             q_reply = q.get("reply", "")
-            badge = "bg-yellow-100 text-yellow-800" if q_status == "Pending" else "bg-green-100 text-green-800"
             
-            st.markdown(f"**{q_user}** &middot; <span style='color:#64748b; font-size:0.85rem;'>{q_date}</span> &middot; **[{q_status}]**", unsafe_allow_html=True)
-            st.markdown(f"<div style='margin-top:8px; padding:12px; background:#f8fafc; border-radius:8px; border-left: 4px solid #cbd5e1; font-size:1rem;'>{q_text}</div>", unsafe_allow_html=True)
+            st.markdown(f"**{q_user}** &middot; <span style='font-size:0.85rem; opacity:0.8;'>{q_date}</span> &middot; **[{q_status}]**", unsafe_allow_html=True)
+            st.markdown(f"<div style='margin-top:8px; padding:12px; background:var(--secondary-background-color); border-radius:8px; border-left: 4px solid #cbd5e1; font-size:1rem;'>{q_text}</div>", unsafe_allow_html=True)
             
             if q_status == "Pending":
                 reply_input = st.text_area("Write your reply:", key=f"reply_input_{q['id']}")
@@ -1170,7 +990,7 @@ def render_admin():
         st.error("Unauthorized access!")
         return
         
-    st.markdown("<h2 style='color:#0f172a; font-weight:800;'>⚙️ Admin Control Panel</h2>", unsafe_allow_html=True)
+    st.markdown("<h2 style='font-weight:800;'>⚙️ Admin Control Panel</h2>", unsafe_allow_html=True)
     st.write("---")
     
     with st.expander("📁 Question Bank Management", expanded=False):
@@ -1216,7 +1036,7 @@ def render_admin():
                 fc1, fc2, fc3, fc4 = st.columns([3, 4, 2, 2])
                 fc1.button(f"📁 {folder}", key=f"nav_{current_admin_path}_{folder}", on_click=nav_admin_down, args=(folder,), use_container_width=True)
                 if current_admin_path == "" and folder in ["Arts", "Computer", "Current affairs", "Science", "Statistics"]:
-                    fc2.markdown("<div style='padding-top:10px; color:#94a3b8; font-size:12px; font-weight:bold;'>Protected</div>", unsafe_allow_html=True)
+                    fc2.markdown("<div style='padding-top:10px; opacity:0.7; font-size:12px; font-weight:bold;'>Protected</div>", unsafe_allow_html=True)
                 else:
                     new_fn = fc2.text_input("Rename", value=folder, key=f"ren_fld_{current_admin_path}_{folder}", label_visibility="collapsed")
                     if fc3.button("✏️ Rename", key=f"rn_btn_{current_admin_path}_{folder}", use_container_width=True):
@@ -1237,7 +1057,7 @@ def render_admin():
             with st.container(border=True):
                 c1, c2 = st.columns([8, 2])
                 c1.markdown(f"📄 **{f_name}**")
-                c2.markdown(f"<span style='color:#64748b;'>{os.path.getsize(file_p)/1024:.1f} KB</span>", unsafe_allow_html=True)
+                c2.markdown(f"<span style='opacity:0.8;'>{os.path.getsize(file_p)/1024:.1f} KB</span>", unsafe_allow_html=True)
                 mc1, mc2, mc3, mc4 = st.columns([3, 4, 2, 2])
                 tgt = mc1.selectbox("Move", ["-- Select --"] + all_folders, key=f"mov_{current_admin_path}_{f_name}", label_visibility="collapsed")
                 if tgt != "-- Select --":
@@ -1310,7 +1130,7 @@ def render_admin():
                 users[ch_u] = ch_p; save_users(users); st.toast("Reset!", icon="✅")
 
 def render_dashboard_practice():
-    st.markdown("<h3 class='available-tests-title' style='margin-bottom:15px;'>📋 Available Test Series</h3>", unsafe_allow_html=True)
+    st.markdown("<h3 style='margin-bottom:15px; font-weight:800;'>📋 Available Test Series</h3>", unsafe_allow_html=True)
     st.session_state.current_bank = st.radio("Question Bank", ["Basic", "Advanced"], horizontal=True, label_visibility="collapsed")
     
     active_base = CSV_FOLDER if st.session_state.current_bank == "Basic" else ADVANCED_CSV_FOLDER
@@ -1339,8 +1159,8 @@ def render_dashboard_practice():
                 att_data = get_attempt_data(st.session_state.current_user, test_k)
                 used, allowed = att_data['used'], att_data['allowed']
                 c1, c2 = st.columns([3, 1])
-                c1.markdown(f"<h4 class='assessment-title' style='margin:0; font-weight:700;'>📄 {os.path.basename(f)[:-4]}</h4>", unsafe_allow_html=True)
-                c1.markdown(f"<span class='assessment-meta' style='font-size:0.85rem; font-weight:600;'>📁 {(os.path.dirname(f) or 'Root').replace('/',' / ')} &middot; Attempts: {used}/{allowed}</span>", unsafe_allow_html=True)
+                c1.markdown(f"<h4 style='margin:0; font-weight:700;'>📄 {os.path.basename(f)[:-4]}</h4>", unsafe_allow_html=True)
+                c1.markdown(f"<span style='font-size:0.85rem; font-weight:600; opacity:0.8;'>📁 {(os.path.dirname(f) or 'Root').replace('/',' / ')} &middot; Attempts: {used}/{allowed}</span>", unsafe_allow_html=True)
                 if allowed - used > 0:
                     if c2.button("Start Assessment", key=f"ld_{test_k}", type="primary", use_container_width=True):
                         with st.spinner("Configuring Engine..."): time.sleep(0.3); load_quiz(f); st.rerun()
@@ -1348,7 +1168,7 @@ def render_dashboard_practice():
                     c2.button("Limit Reached", key=f"lm_{test_k}", disabled=True, use_container_width=True)
 
 def render_dashboard_performance():
-    st.markdown("<h2 style='color:#0f172a; font-weight:800;'>📈 Performance Analytics</h2>", unsafe_allow_html=True)
+    st.markdown("<h2 style='font-weight:800;'>📈 Performance Analytics</h2>", unsafe_allow_html=True)
     st.write("---")
     history = load_history().get(st.session_state.current_user, [])
     
@@ -1381,7 +1201,7 @@ def render_dashboard_performance():
         real_idx = len(history) - 1 - i
         with st.container(border=True):
             r1, r2, r3, r4 = st.columns([3, 2, 2, 2])
-            r1.markdown(f"**{att['test_name']}**<br><span style='font-size:0.8rem; color:#64748b;'>{att['datetime']}</span>", unsafe_allow_html=True)
+            r1.markdown(f"**{att['test_name']}**<br><span style='font-size:0.8rem; opacity:0.8;'>{att['datetime']}</span>", unsafe_allow_html=True)
             r2.markdown(f"**Score:** {att['final_score']:.2f}")
             r3.markdown(f"**Accuracy:** {accs[real_idx]}%")
             if r4.button("View Full Report", key=f"rpt_{real_idx}"):
@@ -1390,8 +1210,8 @@ def render_dashboard_performance():
                 st.rerun()
 
 def render_dashboard_ask_query():
-    st.markdown("<h2 style='color:#0f172a; font-weight:800;'>💬 Support & Doubts</h2>", unsafe_allow_html=True)
-    st.markdown("<p style='color:#64748b;'>Submit technical or academic queries directly to the platform administrators.</p>", unsafe_allow_html=True)
+    st.markdown("<h2 style='font-weight:800;'>💬 Support & Doubts</h2>", unsafe_allow_html=True)
+    st.markdown("<p style='opacity:0.8;'>Submit technical or academic queries directly to the platform administrators.</p>", unsafe_allow_html=True)
     st.write("---")
     
     with st.container(border=True):
@@ -1423,10 +1243,10 @@ def render_dashboard_ask_query():
             with st.container(border=True):
                 stat = q.get("status", "Pending")
                 b_cls = "bg-yellow-100 text-yellow-800" if stat == "Pending" else "bg-green-100 text-green-800"
-                st.markdown(f"<span style='color:#64748b; font-size:0.85rem;'>{q.get('datetime')}</span> &middot; **[{stat}]**", unsafe_allow_html=True)
+                st.markdown(f"<span style='font-size:0.85rem; opacity:0.8;'>{q.get('datetime')}</span> &middot; **[{stat}]**", unsafe_allow_html=True)
                 st.markdown(f"<div style='margin-top:5px; font-weight:600;'>{q.get('text')}</div>", unsafe_allow_html=True)
                 if stat == "Resolved" and q.get("reply"):
-                    st.markdown(f"<div style='margin-top:10px; padding:10px; background:#f0fdf4; border-left:4px solid #16a34a; border-radius:6px;'>**Admin:** {q.get('reply')}</div>", unsafe_allow_html=True)
+                    st.markdown(f"<div style='margin-top:10px; padding:10px; background:var(--secondary-background-color); border-left:4px solid #16a34a; border-radius:6px;'>**Admin:** {q.get('reply')}</div>", unsafe_allow_html=True)
 
 def render_dashboard():
     # Native Streamlit tabs cannot be reliably driven by sidebar without complex hacks, so manual routing is robust.
@@ -1494,7 +1314,7 @@ def render_paused_screen():
     with col2:
         with st.container(border=True):
             st.markdown("<h1 style='text-align: center; color: #dc2626;'>⏸ Session Paused</h1>", unsafe_allow_html=True)
-            st.markdown("<p style='text-align: center; color: #475569;'>Your timer is frozen and progress cached securely.</p>", unsafe_allow_html=True)
+            st.markdown("<p style='text-align: center; opacity:0.8;'>Your timer is frozen and progress cached securely.</p>", unsafe_allow_html=True)
             st.write("---")
             if st.button("▶️ Resume Assessment", type="primary", use_container_width=True):
                 with st.spinner("Resuming..."):
@@ -1524,25 +1344,26 @@ def render_exam():
         with st.container(border=True):
             st.markdown("<p class='palette-title'>Exam Controls & Timer</p>", unsafe_allow_html=True)
             render_visual_timer()
-            st.write("<div style='margin-top:4px;'></div>", unsafe_allow_html=True)
+            st.write("<div style='margin-top:6px;'></div>", unsafe_allow_html=True)
             st.button("⏸ Pause Exam", type="secondary", on_click=pause_exam, use_container_width=True)
             
             udisp = st.session_state.current_user.split()[0]
             html_legend = f"""
-            <div class="exam-session-summary" style="background:#fff; padding:8px; border:1px solid #e2e8f0; border-radius:10px; margin:6px 0; box-shadow:0 3px 8px -4px rgba(0,0,0,0.08);">
-            <div style="display:flex; align-items:center; gap:7px; margin-bottom:7px;">
-            <div style="width:28px; height:28px; background:linear-gradient(135deg, #4f46e5, #6366f1); color:white; border-radius:50%; display:flex; justify-content:center; align-items:center; font-weight:bold;">{udisp[0].upper()}</div>
-            <span style="font-weight:700; color:#0f172a; font-size:14px;">{udisp}'s Session</span>
-            </div>
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:5px 6px; font-size:11px; color:#475569;">
-            <div style="display:flex; align-items:center; gap:5px;"><div style="width:18px; height:18px; background:#16a34a; color:white; border-radius:6px 6px 0 0; display:flex; align-items:center; justify-content:center; font-weight:bold;">{ans_count}</div><span style="font-weight:600;">Answered</span></div>
-            <div style="display:flex; align-items:center; gap:5px;"><div style="width:18px; height:18px; background:#7c3aed; color:white; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:bold;">{marked_count}</div><span style="font-weight:600;">Marked</span></div>
-            <div style="display:flex; align-items:center; gap:5px;"><div style="width:18px; height:18px; background:#fff; border:1px solid #cbd5e1; color:#334155; border-radius:6px; display:flex; align-items:center; justify-content:center; font-weight:bold;">{not_visit_count}</div><span style="font-weight:600;">Not Visited</span></div>
-            <div style="display:flex; align-items:center; gap:5px;"><div style="width:18px; height:18px; background:#ef4444; color:white; border-radius:0 0 6px 6px; display:flex; align-items:center; justify-content:center; font-weight:bold;">{not_ans_count}</div><span style="font-weight:600;">Not Answered</span></div>
-            <div style="display:flex; align-items:center; gap:5px; grid-column:span 2;"><div style="width:18px; height:18px; background:#7c3aed; color:white; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:bold; position:relative;">{ans_marked_count}<div style="position:absolute; bottom:-2px; right:-2px; width:8px; height:8px; background:#16a34a; border-radius:50%; border:1px solid white;"></div></div><span style="font-weight:600;">Marked and Answered</span></div>
-            </div></div>"""
+            <div class="legend-box">
+                <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px;">
+                    <div style="width:24px; height:24px; background:linear-gradient(135deg, #4f46e5, #6366f1); color:white; border-radius:50%; display:flex; justify-content:center; align-items:center; font-weight:bold; font-size:11px;">{udisp[0].upper()}</div>
+                    <span class="legend-title">{udisp}'s Session</span>
+                </div>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px 4px; font-size:10px;">
+                    <div style="display:flex; align-items:center; gap:4px;"><div style="width:14px; height:14px; background:#16a34a; border: 1px solid #16a34a; border-radius:4px; display:flex; align-items:center; justify-content:center;"></div><span class="legend-text">Answered</span></div>
+                    <div style="display:flex; align-items:center; gap:4px;"><div style="width:14px; height:14px; background:#7c3aed; border: 1px solid #7c3aed; border-radius:4px; display:flex; align-items:center; justify-content:center;"></div><span class="legend-text">Marked</span></div>
+                    <div style="display:flex; align-items:center; gap:4px;"><div style="width:14px; height:14px; background:transparent; border:1px solid #cbd5e1; border-radius:4px; display:flex; align-items:center; justify-content:center;"></div><span class="legend-text">Not Visited</span></div>
+                    <div style="display:flex; align-items:center; gap:4px;"><div style="width:14px; height:14px; background:#ef4444; border: 1px solid #ef4444; border-radius:4px; display:flex; align-items:center; justify-content:center;"></div><span class="legend-text">Not Answered</span></div>
+                    <div style="display:flex; align-items:center; gap:4px; grid-column:span 2;"><div style="width:14px; height:14px; background:#7c3aed; border: 1px solid #7c3aed; border-radius:4px; position:relative;"><div style="position:absolute; bottom:-3px; right:-3px; width:7px; height:7px; background:#16a34a; border-radius:50%; border:1px solid white;"></div></div><span class="legend-text" style="margin-left: 2px;">Marked and Answered</span></div>
+                </div>
+            </div>"""
             st.markdown(html_legend, unsafe_allow_html=True)
-        st.markdown(f"<div class='exam-section-label' style='background:linear-gradient(90deg, #eff6ff, #dbeafe); padding:8px; font-weight:800; color:#1e40af; font-size:11px; text-transform:uppercase; border-radius:8px; margin-bottom:8px; text-align:center;'>SECTION: {st.session_state.topic}</div>", unsafe_allow_html=True)
+        st.markdown(f"<div style='background:linear-gradient(90deg, #eff6ff, #dbeafe); padding:10px; font-weight:800; color:#1e40af; font-size:11px; text-transform:uppercase; border-radius:8px; margin-bottom:12px; text-align:center;'>SECTION: {st.session_state.topic}</div>", unsafe_allow_html=True)
 
         with st.expander("System Engine", expanded=False):
             st.markdown("<div id='hidden-engine-marker'></div>", unsafe_allow_html=True)
@@ -1557,17 +1378,30 @@ def render_exam():
             grid_html += f'<div class="{" ".join(cls)}" data-idx="{i}" role="button" tabindex="0">{i+1}</div>\n'
             
         full_html = f"""<!DOCTYPE html><html><head><style>
-        body {{ margin:0; padding:0; font-family:Inter,sans-serif; }}
-        .palette-grid {{ display:grid; grid-template-columns:repeat(5, 1fr); gap:10px; padding:5px; }}
-        .q-btn {{ aspect-ratio:1/1; display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:750; cursor:pointer; border-radius:8px; border:1px solid #cbd5e1; user-select:none; transition:all 0.2s; }}
+        body {{ margin:0; padding:0; font-family:Inter,sans-serif; background: transparent; }}
+        .palette-grid {{ display:grid; grid-template-columns:repeat(5, 1fr); gap:6px; padding:4px; }}
+        .q-btn {{ 
+            aspect-ratio:1/1; display:flex; align-items:center; justify-content:center; 
+            font-size:12px; font-weight:700; cursor:pointer; border-radius:6px; 
+            border:1px solid #cbd5e1; user-select:none; transition:all 0.2s; 
+        }}
         .q-btn:hover {{ transform:translateY(-2px); box-shadow:0 4px 8px rgba(0,0,0,0.1); }}
+        
         .notvisited {{ background:#fff; color:#334155; }}
-        .notanswered {{ background:#ef4444; color:#fff; border-color:#ef4444; border-radius:0 0 12px 12px; }}
-        .answered {{ background:#16a34a; color:#fff; border-color:#16a34a; border-radius:12px 12px 0 0; }}
-        .marked {{ background:#7c3aed; color:#fff; border-color:#7c3aed; border-radius:50%; }}
-        .answeredmarked {{ background:#7c3aed; color:#fff; border-color:#7c3aed; border-radius:50%; position:relative; overflow:visible; }}
-        .answeredmarked::after {{ content:''; position:absolute; bottom:-3px; right:-3px; width:10px; height:10px; background:#16a34a; border-radius:50%; border:2px solid white; }}
-        .current {{ outline:3px solid #2563eb; outline-offset:2px; transform:scale(1.05); z-index:2; }}
+        .notanswered {{ background:#ef4444; color:#fff; border-color:#ef4444; }}
+        .answered {{ background:#16a34a; color:#fff; border-color:#16a34a; }}
+        .marked {{ background:#7c3aed; color:#fff; border-color:#7c3aed; }}
+        .answeredmarked {{ background:#7c3aed; color:#fff; border-color:#7c3aed; position:relative; }}
+        .answeredmarked::after {{ 
+            content:''; position:absolute; bottom:-3px; right:-3px; 
+            width:8px; height:8px; background:#16a34a; border-radius:50%; border:1px solid white; 
+        }}
+        .current {{ outline:2px solid #2563eb; outline-offset:2px; transform:scale(1.05); z-index:2; border-color:transparent; }}
+        
+        @media (prefers-color-scheme: dark) {{
+            .notvisited {{ background:#1e293b; color:#cbd5e1; border-color:#334155; }}
+            .answeredmarked::after {{ border-color: #0f172a; }}
+        }}
         </style></head><body><div class="palette-grid">{grid_html}</div>
         <script>
         function mapAndHide() {{ try {{
@@ -1584,38 +1418,42 @@ def render_exam():
             }});
         }});
         </script></body></html>"""
-        components.html(full_html, height=360, scrolling=True)
+        
+        # Grid scrolls nicely in this smaller block, keeping the main page tight
+        components.html(full_html, height=280, scrolling=True)
 
-        st.markdown("<div style='margin-top: 8px;'></div>", unsafe_allow_html=True)
+        st.markdown("<div style='margin-top: 15px;'></div>", unsafe_allow_html=True)
         b1, b2 = st.columns(2)
         b1.button("Question Paper", use_container_width=True)
         b2.button("Instructions", use_container_width=True)
-        st.write("<div style='height:0.5rem;'></div>", unsafe_allow_html=True)
+        st.write("<br>", unsafe_allow_html=True)
         if st.button("🚀 Final Submit", type="primary", use_container_width=True):
             with st.spinner("Submitting responses securely..."):
                 time.sleep(0.5); nav_submit(); st.rerun()
 
     with col_main:
-        st.markdown(f"<p class='exam-kicker'>Live Assessment &middot; {st.session_state.topic}</p>", unsafe_allow_html=True)
+        st.markdown(f"<p class='exam-kicker' style='font-weight:700; opacity:0.8;'>Live Assessment &middot; {st.session_state.topic}</p>", unsafe_allow_html=True)
         st.progress((q_idx + 1) / total_q)
-        with st.container(height=460, border=False):
+        
+        # RESTORED FIXED HEIGHT: This contains the scroll inside the question plate avoiding massive page jumping!
+        with st.container(height=550, border=False):
             raw_q = q_data['q']
             clean_q = re.sub(r'^[Qq]?(?:uestion)?\s*\d+[\.\)]\s*', '', raw_q)
             st.markdown(f"""
                 <section class="question-card">
-                    <span class="question-card__number">Question {q_idx + 1} of {total_q}</span>
-                    <p class="question-card__text">{clean_q}</p>
+                    <span class="question-card__number" style="font-weight:700; opacity:0.8; font-size:0.9rem;">Question {q_idx + 1} of {total_q}</span>
+                    <p class="question-card__text" style="font-size:1.15rem; font-weight:600; margin-top:8px;">{clean_q}</p>
                 </section>
                 """, unsafe_allow_html=True)
             
             if q_data.get('type') == 'match':
                 saved_ans = st.session_state.user_answers.get(q_idx, {})
                 m_col1, m_col2 = st.columns(2)
-                m_col1.markdown("<div style='color:#64748b; font-weight:800; font-size:0.85rem; text-transform:uppercase; border-bottom:2px solid #e2e8f0; padding-bottom:8px;'>Column A (Fixed)</div>", unsafe_allow_html=True)
-                m_col2.markdown("<div style='color:#64748b; font-weight:800; font-size:0.85rem; text-transform:uppercase; border-bottom:2px solid #e2e8f0; padding-bottom:8px;'>Column B (Select Target)</div>", unsafe_allow_html=True)
+                m_col1.markdown("<div style='font-weight:800; font-size:0.85rem; opacity:0.8; text-transform:uppercase; border-bottom:2px solid rgba(128,128,128,0.2); padding-bottom:8px;'>Column A (Fixed)</div>", unsafe_allow_html=True)
+                m_col2.markdown("<div style='font-weight:800; font-size:0.85rem; opacity:0.8; text-transform:uppercase; border-bottom:2px solid rgba(128,128,128,0.2); padding-bottom:8px;'>Column B (Select Target)</div>", unsafe_allow_html=True)
                 for l_item in q_data['left']:
                     r_c1, r_c2 = st.columns(2)
-                    r_c1.markdown(f"<div style='padding-top:10px; font-weight:650; font-size:1.1rem; color:#0f172a;'>{l_item}</div>", unsafe_allow_html=True)
+                    r_c1.markdown(f"<div style='padding-top:10px; font-weight:650; font-size:1.1rem;'>{l_item}</div>", unsafe_allow_html=True)
                     opts = ["-- Select Option --"] + q_data['options']
                     idx = opts.index(saved_ans.get(l_item, "-- Select Option --")) if saved_ans.get(l_item) in opts else 0
                     r_c2.selectbox("Match Target", opts, index=idx, key=f"match_{q_idx}_{l_item}", on_change=on_match_change, args=(q_idx, q_data['left']), label_visibility="collapsed")
@@ -1678,10 +1516,10 @@ def render_result():
         for qd in att['q_details']:
             card_class = "res-correct" if qd['status'] == "Correct" else "res-incorrect" if qd['status'] == "Incorrect" else "res-unanswered"
             st.markdown(f"<div class='metric-card {card_class}' style='margin-bottom:1rem; min-height:auto; padding:1.2rem;'>", unsafe_allow_html=True)
-            st.markdown(f"<div style='font-size:1.15rem; font-weight:700; color:#0f172a; margin-bottom:8px;'>Q{qd['q_num']}: {qd['question']}</div>", unsafe_allow_html=True)
+            st.markdown(f"<div style='font-size:1.15rem; font-weight:700; margin-bottom:8px;'>Q{qd['q_num']}: {qd['question']}</div>", unsafe_allow_html=True)
             
             c_a, c_b = st.columns(2)
-            c_a.markdown(f"<span style='color:#64748b; font-size:0.8rem; font-weight:700; text-transform:uppercase;'>Your Selection</span>", unsafe_allow_html=True)
+            c_a.markdown(f"<span style='font-size:0.8rem; font-weight:700; text-transform:uppercase; opacity:0.8;'>Your Selection</span>", unsafe_allow_html=True)
             if qd['status'] == "Unanswered":
                 c_a.warning("Not Attempted")
             elif qd['status'] == "Incorrect":
@@ -1689,10 +1527,10 @@ def render_result():
             else:
                 c_a.success(qd['user_ans'])
                 
-            c_b.markdown(f"<span style='color:#64748b; font-size:0.8rem; font-weight:700; text-transform:uppercase;'>Correct Engine Answer</span>", unsafe_allow_html=True)
+            c_b.markdown(f"<span style='font-size:0.8rem; font-weight:700; text-transform:uppercase; opacity:0.8;'>Correct Engine Answer</span>", unsafe_allow_html=True)
             c_b.info(qd['correct_ans'])
             
-            st.markdown(f"<div style='margin-top:10px; font-size:0.85rem; color:#475569; font-weight:600;'>Validation: <span style='color:{'#16a34a' if qd['status']=='Correct' else '#dc2626' if qd['status']=='Incorrect' else '#d97706'}'>{qd['status']}</span> &middot; Marks: {qd['marks']} &middot; Penalty: -{qd['negative']:.2f}</div></div>", unsafe_allow_html=True)
+            st.markdown(f"<div style='margin-top:10px; font-size:0.85rem; font-weight:600; opacity:0.9;'>Validation: <span style='color:{'#16a34a' if qd['status']=='Correct' else '#dc2626' if qd['status']=='Incorrect' else '#d97706'}'>{qd['status']}</span> &middot; Marks: {qd['marks']} &middot; Penalty: -{qd['negative']:.2f}</div></div>", unsafe_allow_html=True)
 
 # ==========================================
 # 7. MAIN APPLICATION LOOP
