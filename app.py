@@ -793,6 +793,11 @@ def render_sidebar():
     st.sidebar.markdown(f"### 👤 {st.session_state.current_user}")
     st.sidebar.divider()
     
+    if "Admin" in st.session_state.current_user:
+        if st.sidebar.button("⚙️ Admin Control Panel", use_container_width=True):
+            st.session_state.active_page = "Admin"
+            st.rerun()
+            
     if st.sidebar.button("📚 Dashboard", use_container_width=True):
         st.session_state.active_page = "Dashboard"
         st.rerun()
@@ -813,257 +818,289 @@ def render_sidebar():
             
         st.rerun()
 
-def render_dashboard():
-    st.markdown("<h1 style='color: #1e293b;'>Welcome to Study Booster! 🚀</h1>", unsafe_allow_html=True)
-    st.markdown("<p style='font-size: 1.1rem; color: #475569;'>Select a test series below to begin.</p>", unsafe_allow_html=True)
+def render_admin():
+    if "Admin" not in st.session_state.current_user:
+        st.error("Unauthorized access!")
+        return
+        
+    st.markdown("<h1 style='color: #1e293b;'>⚙️ Admin Control Panel</h1>", unsafe_allow_html=True)
+    st.markdown("<p style='font-size: 1.1rem; color: #475569;'>Manage question banks, users, timers, and platform settings.</p>", unsafe_allow_html=True)
     st.write("---")
     
-    if "Admin" in st.session_state.current_user:
-        # Feature 4: Basic and Advanced banks isolated routing
-        with st.expander("📁 Admin Panel: Question Bank Management", expanded=False):
-            admin_bank = st.radio("Select Question Bank", ["Basic", "Advanced"], horizontal=True, key="admin_bank_radio")
-            if st.session_state.get('last_admin_bank') != admin_bank:
-                st.session_state.admin_current_path = ""
-                st.session_state.last_admin_bank = admin_bank
-            
-            active_admin_base = CSV_FOLDER if admin_bank == "Basic" else ADVANCED_CSV_FOLDER
-            current_admin_path = st.session_state.get('admin_current_path', '')
-            full_admin_path = os.path.join(active_admin_base, current_admin_path.replace('/', os.sep))
-            
-            st.markdown(f"**Current Folder ({admin_bank}):** `Question Bank / {current_admin_path.replace('/', ' / ')}`")
-            
-            c_up, c_newf, c_upld = st.columns(3)
-            with c_up:
-                if current_admin_path != '':
-                    st.button("⬅️ Back / Up", on_click=nav_admin_up, use_container_width=True)
-            with c_newf:
-                new_f = st.text_input("New Folder", key="new_f_input", label_visibility="collapsed", placeholder="Folder Name")
-                if st.button("Create Folder", use_container_width=True):
-                    if new_f:
-                        os.makedirs(os.path.join(full_admin_path, new_f), exist_ok=True)
-                        st.rerun()
-            with c_upld:
-                uploaded_file = st.file_uploader("Upload CSV", type=['csv'], label_visibility="collapsed")
-                if uploaded_file:
-                    save_path = os.path.join(full_admin_path, uploaded_file.name)
-                    with open(save_path, "wb") as f:
-                        f.write(uploaded_file.getbuffer())
-                    st.success("Uploaded!")
-                    time.sleep(1)
+    # Feature 4: Basic and Advanced banks isolated routing
+    with st.expander("📁 Admin Panel: Question Bank Management", expanded=False):
+        admin_bank = st.radio("Select Question Bank", ["Basic", "Advanced"], horizontal=True, key="admin_bank_radio")
+        if st.session_state.get('last_admin_bank') != admin_bank:
+            st.session_state.admin_current_path = ""
+            st.session_state.last_admin_bank = admin_bank
+        
+        active_admin_base = CSV_FOLDER if admin_bank == "Basic" else ADVANCED_CSV_FOLDER
+        current_admin_path = st.session_state.get('admin_current_path', '')
+        full_admin_path = os.path.join(active_admin_base, current_admin_path.replace('/', os.sep))
+        
+        st.markdown(f"**Current Folder ({admin_bank}):** `Question Bank / {current_admin_path.replace('/', ' / ')}`")
+        
+        c_up, c_newf, c_upld = st.columns(3)
+        with c_up:
+            if current_admin_path != '':
+                st.button("⬅️ Back / Up", on_click=nav_admin_up, use_container_width=True)
+        with c_newf:
+            new_f = st.text_input("New Folder", key="new_f_input", label_visibility="collapsed", placeholder="Folder Name")
+            if st.button("Create Folder", use_container_width=True):
+                if new_f:
+                    os.makedirs(os.path.join(full_admin_path, new_f), exist_ok=True)
                     st.rerun()
-                    
-            st.write("---")
-            
-            items = sorted(os.listdir(full_admin_path)) if os.path.exists(full_admin_path) else []
-            folders = [f for f in items if os.path.isdir(os.path.join(full_admin_path, f))]
-            files = [f for f in items if f.endswith('.csv')]
-            
-            st.markdown("#### Folders")
-            if not folders: st.info("No subfolders.")
-            for folder in folders:
-                fc1, fc2 = st.columns([8, 2])
+        with c_upld:
+            uploaded_file = st.file_uploader("Upload CSV", type=['csv'], label_visibility="collapsed")
+            if uploaded_file:
+                save_path = os.path.join(full_admin_path, uploaded_file.name)
+                with open(save_path, "wb") as f:
+                    f.write(uploaded_file.getbuffer())
+                st.success("Uploaded!")
+                time.sleep(1)
+                st.rerun()
+                
+        st.write("---")
+        
+        items = sorted(os.listdir(full_admin_path)) if os.path.exists(full_admin_path) else []
+        folders = [f for f in items if os.path.isdir(os.path.join(full_admin_path, f))]
+        files = [f for f in items if f.endswith('.csv')]
+        
+        st.markdown("#### Folders")
+        if not folders: st.info("No subfolders.")
+        for folder in folders:
+            with st.container(border=True):
+                fc1, fc2, fc3, fc4 = st.columns([3, 4, 2, 2])
                 fc1.button(f"📁 {folder}", key=f"nav_{current_admin_path}_{folder}", on_click=nav_admin_down, args=(folder,), use_container_width=True)
                 if current_admin_path == "" and folder in ["Arts", "Computer", "Current affairs", "Science", "Statistics"]:
                     fc2.markdown("<div style='padding-top:10px; color:#94a3b8; font-size:12px; font-weight:bold;'>System Folder</div>", unsafe_allow_html=True)
                 else:
-                    if fc2.button("🗑️ Delete", key=f"del_f_{current_admin_path}_{folder}", use_container_width=True):
+                    new_folder_name = fc2.text_input("Rename Folder", value=folder, key=f"ren_fld_inp_{current_admin_path}_{folder}", label_visibility="collapsed")
+                    if fc3.button("✏️ Rename", key=f"ren_fld_btn_{current_admin_path}_{folder}", use_container_width=True):
+                        if new_folder_name and new_folder_name.strip() and new_folder_name.strip() != folder:
+                            try:
+                                os.rename(os.path.join(full_admin_path, folder), os.path.join(full_admin_path, new_folder_name.strip()))
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Error renaming folder: {e}")
+                    if fc4.button("🗑️ Delete", key=f"del_f_{current_admin_path}_{folder}", use_container_width=True):
                         try:
                             os.rmdir(os.path.join(full_admin_path, folder))
                             st.rerun()
                         except OSError:
                             st.error("Folder not empty! Delete files inside first.")
-                            
-            st.write("---")
-            st.markdown("#### Files")
-            if not files: st.info("No files in this folder.")
+                        
+        st.write("---")
+        st.markdown("#### Files")
+        if not files: st.info("No files in this folder.")
+        
+        all_folders = []
+        for root, dirs, _ in os.walk(active_admin_base):
+            for d in dirs:
+                rel = os.path.relpath(os.path.join(root, d), active_admin_base).replace(os.sep, '/')
+                all_folders.append(rel)
+        all_folders.insert(0, "Root")
+        
+        for f_name in files:
+            file_p = os.path.join(full_admin_path, f_name)
+            f_size = os.path.getsize(file_p) / 1024
             
-            all_folders = []
-            for root, dirs, _ in os.walk(active_admin_base):
-                for d in dirs:
-                    rel = os.path.relpath(os.path.join(root, d), active_admin_base).replace(os.sep, '/')
-                    all_folders.append(rel)
-            all_folders.insert(0, "Root")
-            
-            for f_name in files:
-                file_p = os.path.join(full_admin_path, f_name)
-                f_size = os.path.getsize(file_p) / 1024
-                
-                c1, c2, c3, c4 = st.columns([4, 2, 3, 2])
+            with st.container(border=True):
+                c1, c2 = st.columns([8, 2])
                 c1.markdown(f"📄 **{f_name}**")
                 c2.markdown(f"{f_size:.1f} KB")
                 
-                move_target = c3.selectbox("Move to", ["-- Select --"] + all_folders, key=f"mov_{current_admin_path}_{f_name}", label_visibility="collapsed")
+                mc1, mc2, mc3, mc4 = st.columns([3, 4, 2, 2])
+                move_target = mc1.selectbox("Move to", ["-- Select --"] + all_folders, key=f"mov_{current_admin_path}_{f_name}", label_visibility="collapsed")
                 if move_target != "-- Select --":
                     tgt = active_admin_base if move_target == "Root" else os.path.join(active_admin_base, move_target.replace('/', os.sep))
                     os.rename(file_p, os.path.join(tgt, f_name))
                     st.rerun()
-                    
-                if c4.button("🗑️ Delete", key=f"del_{current_admin_path}_{f_name}", use_container_width=True):
+                
+                new_f_name = mc2.text_input("Rename File", value=f_name, key=f"ren_inp_{current_admin_path}_{f_name}", label_visibility="collapsed")
+                if mc3.button("✏️ Rename", key=f"ren_btn_{current_admin_path}_{f_name}", use_container_width=True):
+                    if new_f_name and new_f_name.strip() and new_f_name.strip() != f_name:
+                        clean_name = new_f_name.strip()
+                        if not clean_name.endswith('.csv'):
+                            clean_name += '.csv'
+                        try:
+                            os.rename(file_p, os.path.join(full_admin_path, clean_name))
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Error renaming file: {e}")
+                            
+                if mc4.button("🗑️ Delete", key=f"del_{current_admin_path}_{f_name}", use_container_width=True):
                     os.remove(file_p)
                     st.rerun()
 
-        # Combine options for all Administrative forms to allow unified settings for both Banks
-        all_basic = get_all_csv_files(CSV_FOLDER)
-        all_adv = get_all_csv_files(ADVANCED_CSV_FOLDER)
-        admin_file_options = {}
-        for f in all_basic: admin_file_options[f"Basic | {f}"] = f
-        for f in all_adv: admin_file_options[f"Advanced | {f}"] = f"ADVANCED|{f}"
+    # Combine options for all Administrative forms to allow unified settings for both Banks
+    all_basic = get_all_csv_files(CSV_FOLDER)
+    all_adv = get_all_csv_files(ADVANCED_CSV_FOLDER)
+    admin_file_options = {}
+    for f in all_basic: admin_file_options[f"Basic | {f}"] = f
+    for f in all_adv: admin_file_options[f"Advanced | {f}"] = f"ADVANCED|{f}"
 
-        with st.expander("⏱️ Admin Panel: Timer Management", expanded=False):
-            st.markdown("Configure timer rules for each test individually.")
-            if admin_file_options:
-                sel_display = st.selectbox("Select Test to Configure Timer", list(admin_file_options.keys()), key="tmr_test")
-                t_file = admin_file_options[sel_display]
-                
-                if t_file:
-                    timers_data = load_timers_data()
-                    current_settings = timers_data.get(t_file, {"mode": "Total Time", "value": 30})
-                    
-                    new_mode = st.radio(
-                        "Timer Mode", 
-                        ["Total Time", "Per Question", "No Timer"], 
-                        index=["Total Time", "Per Question", "No Timer"].index(current_settings["mode"])
-                    )
-                    new_val = current_settings.get("value", 30)
-                    
-                    if new_mode == "Total Time":
-                        new_val = st.number_input("Total Minutes", min_value=1, value=new_val if current_settings["mode"] == "Total Time" else 30)
-                    elif new_mode == "Per Question":
-                        new_val = st.number_input("Seconds per Question", min_value=1, value=new_val if current_settings["mode"] == "Per Question" else 45)
-                    else:
-                        new_val = 0 
-                    
-                    if st.button("Save Timer Settings", type="primary"):
-                        timers_data[t_file] = {"mode": new_mode, "value": new_val}
-                        save_timers_data(timers_data)
-                        st.success(f"✅ Timer settings saved for {sel_display}!")
-            else:
-                st.info("No tests available to configure.")
-
-        with st.expander("⚙️ Admin Panel: Attempt Management", expanded=False):
-            st.markdown("Select a user and a test to modify attempt limits.")
-            a_col1, a_col2 = st.columns(2)
-            users = get_all_users()
-            with a_col1:
-                sel_user = st.selectbox("Select User", list(users.keys()), key="adm_user")
-            with a_col2:
-                if admin_file_options:
-                    sel_test_display = st.selectbox("Select Test", list(admin_file_options.keys()), key="adm_test")
-                    sel_test = admin_file_options[sel_test_display]
-                else:
-                    sel_test = None
+    with st.expander("⏱️ Admin Panel: Timer Management", expanded=False):
+        st.markdown("Configure timer rules for each test individually.")
+        if admin_file_options:
+            sel_display = st.selectbox("Select Test to Configure Timer", list(admin_file_options.keys()), key="tmr_test")
+            t_file = admin_file_options[sel_display]
             
-            if sel_user and sel_test:
-                curr_data = get_attempt_data(sel_user, sel_test)
-                new_limit = st.number_input("Allowed Attempts", min_value=1, value=curr_data['allowed'], key="adm_limit")
-                if st.button("Update Limit", type="primary", key="btn_update_limit"):
-                    set_allowed_attempts(sel_user, sel_test, new_limit)
-                    st.success(f"✅ Updated! {sel_user.split()[0]} now has {new_limit} allowed attempts for {sel_test_display}.")
-
-        # Feature 3: Negative Marking Configuration
-        with st.expander("⚖️ Admin Panel: Negative Marking Configuration", expanded=False):
-            st.markdown("Set negative marking (Range 0.00 to 0.33) deducted for incorrect answers.")
-            if admin_file_options:
-                sel_display_nm = st.selectbox("Select Test for Negative Marking", list(admin_file_options.keys()), key="nm_sel_test")
-                nm_test_key = admin_file_options[sel_display_nm]
+            if t_file:
+                timers_data = load_timers_data()
+                current_settings = timers_data.get(t_file, {"mode": "Total Time", "value": 30})
                 
-                curr_val = get_neg_mark(nm_test_key)
-                new_val = st.number_input("Negative Marks per Incorrect Answer", min_value=0.0, max_value=0.33, value=float(curr_val), step=0.01)
+                new_mode = st.radio(
+                    "Timer Mode", 
+                    ["Total Time", "Per Question", "No Timer"], 
+                    index=["Total Time", "Per Question", "No Timer"].index(current_settings["mode"])
+                )
+                new_val = current_settings.get("value", 30)
                 
-                if st.button("Save Negative Marking", type="primary"):
-                    set_neg_mark(nm_test_key, new_val)
-                    st.success(f"✅ Negative marking updated to {new_val} for {sel_display_nm}!")
-            else:
-                st.info("No tests available to configure.")
-
-        # Feature 1: Complete User Management Panel
-        with st.expander("👥 Admin Panel: User Management", expanded=False):
-            users = get_all_users()
-            um_tabs = st.tabs(["Add User", "Remove User", "Change Password"])
-            
-            with um_tabs[0]:
-                new_u = st.text_input("New Username (Format: Name (Role))")
-                new_p = st.text_input("Password", type="password")
-                if st.button("Add User", type="primary"):
-                    if new_u in users:
-                        st.error("Username already exists!")
-                    elif new_u and new_p:
-                        users[new_u] = new_p
-                        save_users(users)
-                        st.success(f"Added user: {new_u}")
-                        st.rerun()
-                        
-            with um_tabs[1]:
-                del_u = st.selectbox("Select User to Remove", [u for u in users if "Admin" not in u])
-                confirm_del = st.checkbox(f"I confirm I want to permanently delete {del_u}")
-                if st.button("Delete User", type="primary"):
-                    if confirm_del and del_u:
-                        del users[del_u]
-                        save_users(users)
-                        st.success("User deleted!")
-                        st.rerun()
-                    elif not confirm_del:
-                        st.warning("Please confirm deletion.")
-                        
-            with um_tabs[2]:
-                ch_u = st.selectbox("Select User", list(users.keys()), key="ch_u")
-                ch_p = st.text_input("New Password", type="password", key="ch_p")
-                if st.button("Change Password", type="primary"):
-                    if ch_p:
-                        users[ch_u] = ch_p
-                        save_users(users)
-                        st.success("Password updated immediately!")
-
-        # Feature 2: User Progress Report Dashboard
-        with st.expander("📊 Admin Panel: User Progress Report", expanded=False):
-            users = get_all_users()
-            rep_u = st.selectbox("Select User for Report", list(users.keys()))
-            if rep_u:
-                history = load_history().get(rep_u, [])
-                if not history:
-                    st.info(f"No attempt history found for {rep_u}.")
+                if new_mode == "Total Time":
+                    new_val = st.number_input("Total Minutes", min_value=1, value=new_val if current_settings["mode"] == "Total Time" else 30)
+                elif new_mode == "Per Question":
+                    new_val = st.number_input("Seconds per Question", min_value=1, value=new_val if current_settings["mode"] == "Per Question" else 45)
                 else:
-                    total_tests = len(set(h['test_name'] for h in history))
-                    total_attempts = len(history)
-                    scores = [h['final_score'] for h in history]
-                    percentages = [h['percentage'] for h in history]
-                    avg_score = sum(scores) / len(scores) if scores else 0
-                    avg_perc = sum(percentages) / len(percentages) if percentages else 0
-                    high_score = max(scores) if scores else 0
-                    low_score = min(scores) if scores else 0
-                    last_attempt = history[-1]['datetime'] if history else "N/A"
+                    new_val = 0 
+                
+                if st.button("Save Timer Settings", type="primary"):
+                    timers_data[t_file] = {"mode": new_mode, "value": new_val}
+                    save_timers_data(timers_data)
+                    st.success(f"✅ Timer settings saved for {sel_display}!")
+        else:
+            st.info("No tests available to configure.")
+
+    with st.expander("⚙️ Admin Panel: Attempt Management", expanded=False):
+        st.markdown("Select a user and a test to modify attempt limits.")
+        a_col1, a_col2 = st.columns(2)
+        users = get_all_users()
+        with a_col1:
+            sel_user = st.selectbox("Select User", list(users.keys()), key="adm_user")
+        with a_col2:
+            if admin_file_options:
+                sel_test_display = st.selectbox("Select Test", list(admin_file_options.keys()), key="adm_test")
+                sel_test = admin_file_options[sel_test_display]
+            else:
+                sel_test = None
+        
+        if sel_user and sel_test:
+            curr_data = get_attempt_data(sel_user, sel_test)
+            new_limit = st.number_input("Allowed Attempts", min_value=1, value=curr_data['allowed'], key="adm_limit")
+            if st.button("Update Limit", type="primary", key="btn_update_limit"):
+                set_allowed_attempts(sel_user, sel_test, new_limit)
+                st.success(f"✅ Updated! {sel_user.split()[0]} now has {new_limit} allowed attempts for {sel_test_display}.")
+
+    # Feature 3: Negative Marking Configuration
+    with st.expander("⚖️ Admin Panel: Negative Marking Configuration", expanded=False):
+        st.markdown("Set negative marking (Range 0.00 to 0.33) deducted for incorrect answers.")
+        if admin_file_options:
+            sel_display_nm = st.selectbox("Select Test for Negative Marking", list(admin_file_options.keys()), key="nm_sel_test")
+            nm_test_key = admin_file_options[sel_display_nm]
+            
+            curr_val = get_neg_mark(nm_test_key)
+            new_val = st.number_input("Negative Marks per Incorrect Answer", min_value=0.0, max_value=0.33, value=float(curr_val), step=0.01)
+            
+            if st.button("Save Negative Marking", type="primary"):
+                set_neg_mark(nm_test_key, new_val)
+                st.success(f"✅ Negative marking updated to {new_val} for {sel_display_nm}!")
+        else:
+            st.info("No tests available to configure.")
+
+    # Feature 1: Complete User Management Panel
+    with st.expander("👥 Admin Panel: User Management", expanded=False):
+        users = get_all_users()
+        um_tabs = st.tabs(["Add User", "Remove User", "Change Password"])
+        
+        with um_tabs[0]:
+            new_u = st.text_input("New Username (Format: Name (Role))")
+            new_p = st.text_input("Password", type="password")
+            if st.button("Add User", type="primary"):
+                if new_u in users:
+                    st.error("Username already exists!")
+                elif new_u and new_p:
+                    users[new_u] = new_p
+                    save_users(users)
+                    st.success(f"Added user: {new_u}")
+                    st.rerun()
                     
-                    st.markdown("#### Overall Summary")
-                    c1, c2, c3, c4 = st.columns(4)
-                    c1.metric("Total Tests", total_tests)
-                    c2.metric("Total Attempts", total_attempts)
-                    c3.metric("Highest Score", f"{high_score:.2f}")
-                    c4.metric("Lowest Score", f"{low_score:.2f}")
+        with um_tabs[1]:
+            del_u = st.selectbox("Select User to Remove", [u for u in users if "Admin" not in u])
+            confirm_del = st.checkbox(f"I confirm I want to permanently delete {del_u}")
+            if st.button("Delete User", type="primary"):
+                if confirm_del and del_u:
+                    del users[del_u]
+                    save_users(users)
+                    st.success("User deleted!")
+                    st.rerun()
+                elif not confirm_del:
+                    st.warning("Please confirm deletion.")
                     
-                    c5, c6, c7, c8 = st.columns(4)
-                    c5.metric("Avg Score", f"{avg_score:.2f}")
-                    c6.metric("Avg Percentage", f"{avg_perc:.2f}%")
-                    c7.metric("Last Attempt", last_attempt)
-                    
-                    st.write("---")
-                    st.markdown("#### Attempt History")
-                    for att in reversed(history):
-                        result_status = "Pass" if att['percentage'] >= 33 else "Fail"
-                        with st.expander(f"Attempt {att['attempt_number']} - {att['test_name']} ({att['datetime']}) | Score: {att['final_score']:.2f} | {result_status}"):
-                            st.write(f"**Subject:** {att['subject']} | **Folder:** {att['folder']}")
-                            st.write(f"**Total Qs:** {att['total_questions']} | **Attempted:** {att['attempted']} | **Correct:** {att['correct']} | **Incorrect:** {att['incorrect']} | **Unanswered:** {att['unanswered']}")
-                            st.write(f"**Marks Obtained:** {att['marks_obtained']} | **Negative Marks:** {att['negative_marks']:.2f} | **Final Score:** {att['final_score']:.2f} | **Percentage:** {att['percentage']}%")
-                            
-                            st.markdown("##### Detailed Question Report")
-                            for qd in att['q_details']:
-                                st.markdown(f"**Q{qd['q_num']}. {qd['question']}**")
-                                c_a, c_b, c_c = st.columns(3)
-                                c_a.write(f"**Selected:** {qd['user_ans']}")
-                                c_b.write(f"**Correct:** {qd['correct_ans']}")
-                                status_color = "green" if qd['status'] == "Correct" else "red" if qd['status'] == "Incorrect" else "orange"
-                                c_c.markdown(f"**Status:** <span style='color:{status_color}'>{qd['status']}</span>", unsafe_allow_html=True)
-                                st.write(f"**Marks:** {qd['marks']} | **Negative:** {qd['negative']:.2f}")
-                                st.write("---")
+        with um_tabs[2]:
+            ch_u = st.selectbox("Select User", list(users.keys()), key="ch_u")
+            ch_p = st.text_input("New Password", type="password", key="ch_p")
+            if st.button("Change Password", type="primary"):
+                if ch_p:
+                    users[ch_u] = ch_p
+                    save_users(users)
+                    st.success("Password updated immediately!")
+
+    # Feature 2: User Progress Report Dashboard
+    with st.expander("📊 Admin Panel: User Progress Report", expanded=False):
+        users = get_all_users()
+        rep_u = st.selectbox("Select User for Report", list(users.keys()))
+        if rep_u:
+            history = load_history().get(rep_u, [])
+            if not history:
+                st.info(f"No attempt history found for {rep_u}.")
+            else:
+                total_tests = len(set(h['test_name'] for h in history))
+                total_attempts = len(history)
+                scores = [h['final_score'] for h in history]
+                percentages = [h['percentage'] for h in history]
+                avg_score = sum(scores) / len(scores) if scores else 0
+                avg_perc = sum(percentages) / len(percentages) if percentages else 0
+                high_score = max(scores) if scores else 0
+                low_score = min(scores) if scores else 0
+                last_attempt = history[-1]['datetime'] if history else "N/A"
+                
+                st.markdown("#### Overall Summary")
+                c1, c2, c3, c4 = st.columns(4)
+                c1.metric("Total Tests", total_tests)
+                c2.metric("Total Attempts", total_attempts)
+                c3.metric("Highest Score", f"{high_score:.2f}")
+                c4.metric("Lowest Score", f"{low_score:.2f}")
+                
+                c5, c6, c7, c8 = st.columns(4)
+                c5.metric("Avg Score", f"{avg_score:.2f}")
+                c6.metric("Avg Percentage", f"{avg_perc:.2f}%")
+                c7.metric("Last Attempt", last_attempt)
+                
+                st.write("---")
+                st.markdown("#### Attempt History")
+                for att in reversed(history):
+                    result_status = "Pass" if att['percentage'] >= 33 else "Fail"
+                    with st.expander(f"Attempt {att['attempt_number']} - {att['test_name']} ({att['datetime']}) | Score: {att['final_score']:.2f} | {result_status}"):
+                        st.write(f"**Subject:** {att['subject']} | **Folder:** {att['folder']}")
+                        st.write(f"**Total Qs:** {att['total_questions']} | **Attempted:** {att['attempted']} | **Correct:** {att['correct']} | **Incorrect:** {att['incorrect']} | **Unanswered:** {att['unanswered']}")
+                        st.write(f"**Marks Obtained:** {att['marks_obtained']} | **Negative Marks:** {att['negative_marks']:.2f} | **Final Score:** {att['final_score']:.2f} | **Percentage:** {att['percentage']}%")
+                        
+                        st.markdown("##### Detailed Question Report")
+                        for qd in att['q_details']:
+                            st.markdown(f"**Q{qd['q_num']}. {qd['question']}**")
+                            c_a, c_b, c_c = st.columns(3)
+                            c_a.write(f"**Selected:** {qd['user_ans']}")
+                            c_b.write(f"**Correct:** {qd['correct_ans']}")
+                            status_color = "green" if qd['status'] == "Correct" else "red" if qd['status'] == "Incorrect" else "orange"
+                            c_c.markdown(f"**Status:** <span style='color:{status_color}'>{qd['status']}</span>", unsafe_allow_html=True)
+                            st.write(f"**Marks:** {qd['marks']} | **Negative:** {qd['negative']:.2f}")
+                            st.write("---")
+
+
+def render_dashboard():
+    st.markdown("<h1 style='color: #1e293b;'>Welcome to Study Booster! 🚀</h1>", unsafe_allow_html=True)
+    st.markdown("<p style='font-size: 1.1rem; color: #475569;'>Select a test series below to begin.</p>", unsafe_allow_html=True)
+    st.write("---")
 
     col_space1, col_tests, col_space2 = st.columns([1, 4, 1])
     
@@ -1596,6 +1633,8 @@ def main():
         
         if st.session_state.active_page == "Dashboard":
             render_dashboard()
+        elif st.session_state.active_page == "Admin":
+            render_admin()
         elif st.session_state.active_page == "Instructions":
             render_instructions()
         elif st.session_state.active_page == "Exam":
