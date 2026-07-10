@@ -604,6 +604,51 @@ def on_match_change(q_idx, left_items):
 # ==========================================
 # 5. CSS & JAVASCRIPT INJECTION
 # ==========================================
+UI_COLORS = {
+    "primary": "#2563eb",
+    "primary_dark": "#1d4ed8",
+    "ink": "#172033",
+    "muted": "#64748b",
+    "surface": "#ffffff",
+    "surface_subtle": "#f8fafc",
+    "border": "#e2e8f0",
+    "success": "#15803d",
+    "warning": "#b45309",
+    "danger": "#dc2626",
+}
+
+
+def render_page_header(title, subtitle=None, eyebrow=None):
+    """Render a consistent, presentation-only page header."""
+    eyebrow_html = f"<p class='page-eyebrow'>{eyebrow}</p>" if eyebrow else ""
+    subtitle_html = f"<p class='page-subtitle'>{subtitle}</p>" if subtitle else ""
+    st.markdown(
+        f"""
+        <section class="page-header">
+            {eyebrow_html}
+            <h1>{title}</h1>
+            {subtitle_html}
+        </section>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_metric_card(label, value, accent="blue", helper_text=None):
+    """Render a reusable result or reporting metric without changing its value."""
+    helper_html = f"<p>{helper_text}</p>" if helper_text else ""
+    st.markdown(
+        f"""
+        <div class="metric-card metric-{accent}">
+            <span>{label}</span>
+            <strong>{value}</strong>
+            {helper_html}
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def inject_custom_css():
     try:
         with open('bg.jpg', "rb") as image_file:
@@ -622,69 +667,195 @@ def inject_custom_css():
     st.markdown(f"""
         <style>
         {bg_css}
-        
-        .block-container {{ 
-            max-width: 98% !important; 
-            padding: 1.5rem !important; 
-            background-color: rgba(255, 255, 255, 0.98) !important; 
-            border-radius: 16px;
-            margin-top: 15px;
-            box-shadow: 0 8px 32px rgba(0,0,0,0.15);
-            transition: all 0.3s ease;
+
+        :root {{
+            --sb-primary: {UI_COLORS['primary']};
+            --sb-primary-dark: {UI_COLORS['primary_dark']};
+            --sb-ink: {UI_COLORS['ink']};
+            --sb-muted: {UI_COLORS['muted']};
+            --sb-surface: {UI_COLORS['surface']};
+            --sb-surface-subtle: {UI_COLORS['surface_subtle']};
+            --sb-border: {UI_COLORS['border']};
+            --sb-success: {UI_COLORS['success']};
+            --sb-warning: {UI_COLORS['warning']};
+            --sb-danger: {UI_COLORS['danger']};
         }}
-        
-        header[data-testid="stHeader"] {{ background-color: transparent !important; }}
-        
-        section[data-testid="stMain"] p, 
-        section[data-testid="stMain"] h1, 
-        section[data-testid="stMain"] h2, 
-        section[data-testid="stMain"] h3, 
-        section[data-testid="stMain"] h4, 
-        section[data-testid="stMain"] h5, 
-        section[data-testid="stMain"] h6, 
-        section[data-testid="stMain"] label, 
+
+        html {{ font-size: 16px; }}
+        .stApp {{ color: var(--sb-ink); background-color: #f1f5f9; }}
+        header[data-testid="stHeader"] {{ background: transparent !important; }}
+        .block-container {{
+            max-width: 1440px !important;
+            padding: clamp(1rem, 2vw, 2rem) !important;
+            margin: 0 auto !important;
+        }}
+        section[data-testid="stMain"] p,
+        section[data-testid="stMain"] h1,
+        section[data-testid="stMain"] h2,
+        section[data-testid="stMain"] h3,
+        section[data-testid="stMain"] h4,
+        section[data-testid="stMain"] h5,
+        section[data-testid="stMain"] h6,
+        section[data-testid="stMain"] label,
         section[data-testid="stMain"] span,
         section[data-testid="stMain"] div[data-baseweb="radio"] div {{
-            color: #0f172a !important; 
+            color: var(--sb-ink) !important;
         }}
 
-        div.stButton > button {{ 
-            background-color: #ffffff !important; 
-            border: 2px solid #e2e8f0 !important;
-            border-radius: 10px !important; 
-            font-weight: 700 !important; 
-            padding: 0.5rem 1rem !important; 
-            width: 100%;
-            font-size: 15px !important;
-            transition: all 0.2s ease-in-out;
-            color: #0f172a !important;
+        /* Shared page structure */
+        .page-header {{
+            margin: 0 0 1.5rem;
+            padding: 1.5rem 1.75rem;
+            border: 1px solid rgba(226, 232, 240, .9);
+            border-radius: 18px;
+            background: linear-gradient(120deg, #ffffff 0%, #f8fbff 100%);
+            box-shadow: 0 10px 28px rgba(15, 23, 42, .06);
         }}
-        div.stButton > button:hover {{
-            border-color: #cbd5e1 !important;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-            transform: translateY(-2px);
+        .page-header h1 {{
+            margin: 0 !important;
+            color: var(--sb-ink) !important;
+            font-size: clamp(1.65rem, 3vw, 2.35rem) !important;
+            letter-spacing: -.035em;
+            line-height: 1.15;
         }}
-        
-        div.stButton > button[kind="primary"] {{ 
-            background: linear-gradient(135deg, #4f46e5 0%, #3b82f6 100%) !important; 
-            border: none !important;
-            color: #ffffff !important;
+        .page-eyebrow {{
+            margin: 0 0 .35rem !important;
+            color: var(--sb-primary) !important;
+            font-size: .74rem;
+            font-weight: 800;
+            letter-spacing: .1em;
+            text-transform: uppercase;
         }}
-        div.stButton > button[kind="primary"] * {{
-            color: #ffffff !important;
+        .page-subtitle {{
+            margin: .55rem 0 0 !important;
+            color: var(--sb-muted) !important;
+            font-size: 1rem;
+            line-height: 1.55;
         }}
-        div.stButton > button[kind="primary"]:hover {{
-            box-shadow: 0 6px 20px rgba(79, 70, 229, 0.6) !important;
+        .metric-card {{
+            min-height: 120px;
+            padding: 1.05rem 1.1rem;
+            border: 1px solid var(--sb-border);
+            border-top: 4px solid var(--metric-accent, var(--sb-primary));
+            border-radius: 14px;
+            background: var(--sb-surface);
+            box-shadow: 0 4px 15px rgba(15, 23, 42, .05);
         }}
+        .metric-card span {{
+            display: block;
+            color: var(--sb-muted) !important;
+            font-size: .78rem;
+            font-weight: 750;
+            letter-spacing: .04em;
+            text-transform: uppercase;
+        }}
+        .metric-card strong {{
+            display: block;
+            margin-top: .35rem;
+            color: var(--sb-ink);
+            font-size: clamp(1.35rem, 2.3vw, 1.9rem);
+            line-height: 1.1;
+        }}
+        .metric-card p {{ margin: .4rem 0 0 !important; color: var(--sb-muted) !important; font-size: .82rem; }}
+        .metric-blue {{ --metric-accent: #2563eb; }}
+        .metric-green {{ --metric-accent: #16a34a; }}
+        .metric-red {{ --metric-accent: #dc2626; }}
+        .metric-amber {{ --metric-accent: #d97706; }}
+        .metric-purple {{ --metric-accent: #7c3aed; }}
+        .exam-kicker {{ margin: 0 0 .45rem; color: var(--sb-primary) !important; font-size: .78rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }}
+        .exam-title {{ margin: 0 0 .8rem; color: var(--sb-ink) !important; font-size: clamp(1.3rem, 2.4vw, 1.8rem); font-weight: 800; letter-spacing: -.025em; }}
+        .question-card {{ margin: .75rem 0 1.15rem; padding: 1.4rem; border: 1px solid #dbe3ef; border-radius: 15px; background: #ffffff; box-shadow: 0 8px 24px rgba(15, 23, 42, .055); }}
+        .question-card__number {{ display: inline-flex; align-items: center; min-height: 26px; padding: 0 .6rem; border-radius: 99px; background: #eff6ff; color: #1d4ed8 !important; font-size: .75rem; font-weight: 800; letter-spacing: .03em; }}
+        .question-card__text {{ margin: .7rem 0 0 !important; color: var(--sb-ink) !important; font-size: clamp(1.05rem, 1.7vw, 1.22rem); font-weight: 650; line-height: 1.65; }}
+        .palette-title {{ margin: .8rem 0 .35rem; color: var(--sb-ink) !important; font-size: .85rem; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; }}
 
+        /* Controls, forms and feedback */
+        div.stButton > button {{
+            min-height: 2.65rem !important;
+            padding: .55rem .9rem !important;
+            border: 1px solid #cbd5e1 !important;
+            border-radius: 10px !important;
+            background: #ffffff !important;
+            color: var(--sb-ink) !important;
+            font-size: .9rem !important;
+            font-weight: 700 !important;
+            transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease, background .16s ease !important;
+        }}
+        div.stButton > button:hover:not(:disabled) {{
+            border-color: #93c5fd !important;
+            background: #f8fbff !important;
+            box-shadow: 0 6px 16px rgba(37, 99, 235, .12) !important;
+            transform: translateY(-1px);
+        }}
+        div.stButton > button:focus-visible,
+        [data-baseweb="select"] input:focus-visible,
+        input:focus-visible {{ outline: 3px solid rgba(37, 99, 235, .35) !important; outline-offset: 2px; }}
+        div.stButton > button:disabled {{ opacity: .52 !important; cursor: not-allowed !important; }}
+        div.stButton > button[kind="primary"] {{
+            border-color: var(--sb-primary) !important;
+            background: linear-gradient(135deg, var(--sb-primary) 0%, #4f46e5 100%) !important;
+            color: #ffffff !important;
+        }}
+        div.stButton > button[kind="primary"] * {{ color: #ffffff !important; }}
+        div.stButton > button[kind="primary"]:hover:not(:disabled) {{ box-shadow: 0 8px 20px rgba(37, 99, 235, .28) !important; }}
         div.stButton > button[kind="secondary"] {{
-            background-color: #fff1f2 !important;
-            border-color: #fecdd3 !important;
-            color: #be123c !important;
+            background: #f8fafc !important;
+            border-color: #cbd5e1 !important;
+            color: var(--sb-ink) !important;
         }}
-        div.stButton > button[kind="secondary"] * {{
-            color: #be123c !important;
+        div.stButton > button[kind="secondary"] * {{ color: var(--sb-ink) !important; }}
+        div[data-baseweb="input"] > div,
+        div[data-baseweb="select"] > div {{ border-radius: 10px !important; border-color: #cbd5e1 !important; }}
+        div[data-baseweb="input"] > div:focus-within,
+        div[data-baseweb="select"] > div:focus-within {{ border-color: var(--sb-primary) !important; box-shadow: 0 0 0 3px rgba(37, 99, 235, .12) !important; }}
+        div[data-testid="stAlert"] {{ border-radius: 12px !important; border-width: 1px !important; }}
+        div[data-testid="stExpander"] {{ border: 1px solid var(--sb-border) !important; border-radius: 13px !important; background: #ffffff !important; overflow: hidden; }}
+        div[data-testid="stExpander"] details summary {{ padding: .2rem 0; font-weight: 750; }}
+        div[data-testid="stVerticalBlockBorderWrapper"] {{ border-radius: 14px !important; border-color: var(--sb-border) !important; box-shadow: 0 3px 12px rgba(15, 23, 42, .035); }}
+        div[data-testid="stDivider"] {{ margin: 1.15rem 0 !important; }}
+
+        /* Option cards keep native radio behavior while making choices easier to scan. */
+        div[data-testid="stRadio"] [role="radiogroup"] {{ gap: .55rem; }}
+        div[data-testid="stRadio"] label {{
+            align-items: center !important;
+            min-height: 3.1rem;
+            padding: .65rem .85rem !important;
+            border: 1px solid #dbe3ef;
+            border-radius: 10px;
+            background: #ffffff;
+            transition: border-color .16s ease, background .16s ease, transform .16s ease;
         }}
+        div[data-testid="stRadio"] label:hover {{ border-color: #93c5fd; background: #f8fbff; transform: translateX(2px); }}
+        div[data-testid="stRadio"] label:has(input:checked) {{ border-color: var(--sb-primary); background: #eff6ff; box-shadow: 0 0 0 1px var(--sb-primary); }}
+
+        /* Navigation */
+        section[data-testid="stSidebar"] {{ background: #0f172a !important; border-right: 1px solid #1e293b; }}
+        section[data-testid="stSidebar"] * {{ color: #e2e8f0 !important; }}
+        section[data-testid="stSidebar"] div.stButton > button {{ background: transparent !important; border-color: transparent !important; color: #cbd5e1 !important; text-align: left !important; box-shadow: none !important; }}
+        section[data-testid="stSidebar"] div.stButton > button:hover:not(:disabled) {{ background: rgba(148, 163, 184, .15) !important; color: #ffffff !important; transform: none; }}
+        section[data-testid="stSidebar"] div.stButton > button[kind="secondary"] {{ color: #fecaca !important; background: rgba(220, 38, 38, .12) !important; }}
+        section[data-testid="stSidebar"] [data-testid="stSidebarContent"] {{ padding-top: 1rem; }}
+        .sidebar-brand {{ margin: .3rem 0 1.2rem; padding: .85rem .8rem; border-radius: 12px; background: linear-gradient(135deg, rgba(37, 99, 235, .28), rgba(79, 70, 229, .16)); border: 1px solid rgba(147, 197, 253, .22); }}
+        .sidebar-brand strong {{ display: block; color: #ffffff !important; font-size: 1.05rem; letter-spacing: -.02em; }}
+        .sidebar-brand span {{ color: #bfdbfe !important; font-size: .73rem; }}
+        .sidebar-user {{ margin-bottom: .35rem; color: #f8fafc !important; font-size: .92rem; font-weight: 750; }}
+        .nav-current {{ margin: .35rem 0 1rem; padding: .65rem .75rem; border-radius: 9px; background: rgba(37, 99, 235, .23); border: 1px solid rgba(96, 165, 250, .3); color: #dbeafe !important; font-size: .8rem; font-weight: 700; }}
+
+        /* Tables and tabular content */
+        [data-testid="stDataFrame"] {{ border: 1px solid var(--sb-border); border-radius: 12px; overflow: hidden; }}
+        [data-testid="stDataFrame"] [role="columnheader"] {{ background: #f8fafc; font-weight: 800; }}
+
+        @media (max-width: 760px) {{
+            html {{ font-size: 15px; }}
+            .block-container {{ padding: .8rem !important; }}
+            .page-header {{ padding: 1.1rem; margin-bottom: 1rem; border-radius: 14px; }}
+            .metric-card {{ min-height: 100px; padding: .85rem; }}
+            div.stButton > button {{ min-height: 2.85rem !important; }}
+            div[data-testid="stRadio"] label {{ min-height: 3.35rem; }}
+            div[data-testid="stHorizontalBlock"] {{ flex-wrap: wrap !important; gap: .75rem !important; }}
+            div[data-testid="stHorizontalBlock"] > div[data-testid="column"] {{ flex: 1 1 100% !important; width: 100% !important; min-width: 0 !important; }}
+        }}
+        @media (prefers-reduced-motion: reduce) {{ * {{ transition: none !important; scroll-behavior: auto !important; }} }}
         </style>
     """, unsafe_allow_html=True)
 
@@ -697,23 +868,27 @@ def render_visual_timer():
     <html>
     <head>
         <style>
-            body {{ margin:0; padding:0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }}
-            .timer-box {{ 
-                background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%); 
-                border: 2px solid #ef4444; 
-                color: #b91c1c; 
-                padding: 12px 0; 
-                border-radius: 12px; 
-                font-size: 24px; 
-                font-weight: 800; 
-                text-align: center; 
-                box-shadow: 0 4px 6px rgba(239, 68, 68, 0.2); 
-                letter-spacing: 1px;
+            body {{ margin:0; padding:0; font-family: Inter, 'Segoe UI', sans-serif; background: transparent; }}
+            .timer-box {{
+                box-sizing: border-box;
+                min-height: 58px;
+                padding: 14px 12px;
+                border: 1px solid #fecaca;
+                border-radius: 12px;
+                background: linear-gradient(135deg, #fff7ed 0%, #fff1f2 100%);
+                color: #991b1b;
+                font-size: 21px;
+                font-weight: 800;
+                text-align: center;
+                box-shadow: 0 5px 14px rgba(153, 27, 27, .08);
+                letter-spacing: .05em;
             }}
-            .no-timer {{ 
-                background: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%); 
-                border-color: #38bdf8; 
-                color: #0369a1; 
+            .no-timer {{
+                background: linear-gradient(135deg, #eff6ff 0%, #ecfeff 100%);
+                border-color: #bae6fd;
+                color: #075985;
+                font-size: 16px;
+                letter-spacing: 0;
             }}
         </style>
     </head>
@@ -749,7 +924,7 @@ def render_visual_timer():
     </body>
     </html>
     """
-    components.html(html_code, height=75)
+    components.html(html_code, height=82)
 
 # ==========================================
 # 6. PAGE RENDERING FUNCTIONS
@@ -758,12 +933,12 @@ def render_visual_timer():
 def render_login():
     users = get_all_users()
     
-    st.write("<br><br><br>", unsafe_allow_html=True)
+    st.write("<br>", unsafe_allow_html=True)
     col1, col2, col3 = st.columns([1, 1.5, 1]) 
     with col2:
-        with st.container():
-            st.markdown("<h1 style='text-align: center; color:#4F46E5 !important; font-weight: 800;'>🎓 Study Booster</h1>", unsafe_allow_html=True)
-            st.markdown("<p style='text-align: center; font-size: 1.1rem; color: #64748b !important;'>Sign in to access your dashboard</p>", unsafe_allow_html=True)
+        with st.container(border=True):
+            st.markdown("<h1 style='text-align: center; color:#172033 !important; font-weight:800; margin-bottom:.35rem;'>Study Booster</h1>", unsafe_allow_html=True)
+            st.markdown("<p style='text-align:center; font-size:1rem; color:#64748b !important; margin-top:0;'>Your focused space for practice, progress, and performance.</p>", unsafe_allow_html=True)
             st.divider()
             
             username = st.selectbox("👤 Select Profile", ["-- Select User --"] + list(users.keys()))
@@ -788,9 +963,13 @@ def render_sidebar():
     try:
         st.sidebar.image("logo.png", use_container_width=True)
     except:
-        st.sidebar.markdown("<h2 style='text-align: center; color: #4F46E5;'>🎓 Study Booster</h2>", unsafe_allow_html=True)
+        st.sidebar.markdown("<div class='sidebar-brand'><strong>Study Booster</strong><span>CBT PRACTICE PLATFORM</span></div>", unsafe_allow_html=True)
 
     st.sidebar.markdown(f"### 👤 {st.session_state.current_user}")
+    st.sidebar.markdown(
+        f"<div class='nav-current'>Current workspace &middot; {st.session_state.active_page}</div>",
+        unsafe_allow_html=True,
+    )
     st.sidebar.divider()
     
     if "Admin" in st.session_state.current_user:
@@ -823,9 +1002,11 @@ def render_admin():
         st.error("Unauthorized access!")
         return
         
-    st.markdown("<h1 style='color: #1e293b;'>⚙️ Admin Control Panel</h1>", unsafe_allow_html=True)
-    st.markdown("<p style='font-size: 1.1rem; color: #475569;'>Manage question banks, users, timers, and platform settings.</p>", unsafe_allow_html=True)
-    st.write("---")
+    render_page_header(
+        "Admin Control Panel",
+        "Manage question banks, users, timers, attempts, and platform settings.",
+        "Platform management",
+    )
     
     # Feature 4: Basic and Advanced banks isolated routing
     with st.expander("📁 Admin Panel: Question Bank Management", expanded=False):
@@ -865,6 +1046,14 @@ def render_admin():
         items = sorted(os.listdir(full_admin_path)) if os.path.exists(full_admin_path) else []
         folders = [f for f in items if os.path.isdir(os.path.join(full_admin_path, f))]
         files = [f for f in items if f.endswith('.csv')]
+        admin_search = st.text_input(
+            "Search folders or CSV files",
+            key=f"admin_search_{admin_bank}_{current_admin_path}",
+            placeholder="Search this folder...",
+        ).strip().lower()
+        if admin_search:
+            folders = [folder for folder in folders if admin_search in folder.lower()]
+            files = [file_name for file_name in files if admin_search in file_name.lower()]
         
         st.markdown("#### Folders")
         if not folders: st.info("No subfolders.")
@@ -1098,9 +1287,12 @@ def render_admin():
 
 
 def render_dashboard():
-    st.markdown("<h1 style='color: #1e293b;'>Welcome to Study Booster! 🚀</h1>", unsafe_allow_html=True)
-    st.markdown("<p style='font-size: 1.1rem; color: #475569;'>Select a test series below to begin.</p>", unsafe_allow_html=True)
-    st.write("---")
+    first_name = st.session_state.current_user.split()[0] if st.session_state.current_user else "Learner"
+    render_page_header(
+        f"Welcome back, {first_name}",
+        "Choose a test series and continue building your exam readiness.",
+        "Practice dashboard",
+    )
 
     col_space1, col_tests, col_space2 = st.columns([1, 4, 1])
     
@@ -1167,6 +1359,7 @@ def render_dashboard():
                             load_quiz(file)
                     else:
                         c2.button("Limit Reached", key=f"limit_{test_key}", disabled=True, help="You have reached the maximum number of attempts allowed for this test. Please contact the administrator.")
+                    st.divider()
                         
     if st.session_state.quiz_ready:
         st.divider()
@@ -1178,9 +1371,11 @@ def render_dashboard():
                 st.rerun()
 
 def render_instructions():
-    st.markdown(f"<h1 style='color: #4F46E5; text-align: center;'>📜 Instructions</h1>", unsafe_allow_html=True)
-    st.markdown(f"<h3 style='text-align: center; color: #475569;'>{st.session_state.topic}</h3>", unsafe_allow_html=True)
-    st.divider()
+    render_page_header(
+        "Instructions",
+        st.session_state.topic,
+        "Before you begin",
+    )
     
     col1, col2, col3 = st.columns([1, 3, 1])
     with col2:
@@ -1239,34 +1434,6 @@ def render_exam():
     total_q = len(st.session_state.questions)
     q_data = st.session_state.questions[q_idx]
 
-    # STANDARD LAYOUT CSS
-    st.markdown("""
-    <style>
-    div[data-testid="column"]:nth-of-type(2) {
-        background-color: #f0f8ff !important;
-        border: 1px solid #bfdbfe !important;
-        border-radius: 8px !important;
-        padding-bottom: 15px !important;
-        overflow: hidden; 
-    }
-    div[data-testid="column"]:nth-of-type(2) > div[data-testid="stVerticalBlock"] > div[data-testid="stHorizontalBlock"] div.stButton > button {
-        background-color: #dbeafe !important;
-        color: #1e40af !important;
-        border: none !important;
-        font-size: 13px !important;
-        border-radius: 4px !important;
-    }
-    div[data-testid="column"]:nth-of-type(2) > div[data-testid="stVerticalBlock"] > div:last-child div.stButton > button {
-        background-color: #0ea5e9 !important;
-        color: white !important;
-        border: none !important;
-        font-size: 14px !important;
-        border-radius: 4px !important;
-        margin-top: 5px !important;
-    }
-    </style>
-    """, unsafe_allow_html=True)
-
     col_main, col_pal = st.columns([7, 3]) 
     
     ans_count = 0
@@ -1293,6 +1460,7 @@ def render_exam():
             
     # ================== RIGHT PANEL ==================
     with col_pal:
+        st.markdown("<p class='palette-title'>Exam controls</p>", unsafe_allow_html=True)
         render_visual_timer()
         st.button("⏸ Pause", type="secondary", on_click=pause_exam, use_container_width=True, key="btn_pause_top")
         
@@ -1367,19 +1535,19 @@ def render_exam():
             if is_curr:
                 classes.append("current")
                 
-            grid_html += f'<div class="{" ".join(classes)}" data-idx="{i}">{i+1}</div>\n'
+            grid_html += f'<div class="{" ".join(classes)}" data-idx="{i}" role="button" tabindex="0" aria-label="Go to question {i+1}">{i+1}</div>\n'
             
         full_html = f"""
         <!DOCTYPE html>
         <html>
         <head>
         <style>
-        body {{ margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: transparent; }}
+        body {{ margin: 0; padding: 0; font-family: Inter, 'Segoe UI', sans-serif; background-color: transparent; }}
         .palette-grid {{
             display: grid;
-            grid-template-columns: repeat(5, 1fr);
-            gap: 8px;
-            padding: 5px;
+            grid-template-columns: repeat(5, minmax(34px, 1fr));
+            gap: 9px;
+            padding: 7px 5px;
         }}
         .q-btn {{
             aspect-ratio: 1 / 1;
@@ -1387,24 +1555,25 @@ def render_exam():
             align-items: center;
             justify-content: center;
             font-size: 13px;
-            font-weight: 600;
+            font-weight: 750;
             cursor: pointer;
-            border-radius: 4px;
+            border-radius: 8px;
             border: 1px solid #cbd5e1;
             user-select: none;
-            transition: transform 0.1s ease;
+            transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease;
         }}
-        .q-btn:hover {{ transform: scale(1.05); }}
-        .notvisited {{ background: #ffffff; color: #000000; border-color: #cbd5e1; }}
-        .notanswered {{ background: #e55a45; color: #ffffff; border-color: #e55a45; border-radius: 0 0 15px 15px; }}
-        .answered {{ background: #2bc765; color: #ffffff; border-color: #2bc765; border-radius: 15px 15px 0 0; }}
-        .marked {{ background: #9d48b1; color: #ffffff; border-color: #9d48b1; border-radius: 50%; }}
-        .answeredmarked {{ background: #9d48b1; color: #ffffff; border-color: #9d48b1; border-radius: 50%; position: relative; overflow: visible; }}
+        .q-btn:hover {{ transform: translateY(-2px); box-shadow: 0 5px 10px rgba(15, 23, 42, .13); }}
+        .q-btn:focus-visible {{ outline: 3px solid #2563eb; outline-offset: 2px; }}
+        .notvisited {{ background: #ffffff; color: #334155; border-color: #cbd5e1; }}
+        .notanswered {{ background: #e55a45; color: #ffffff; border-color: #e55a45; border-radius: 0 0 12px 12px; }}
+        .answered {{ background: #16a34a; color: #ffffff; border-color: #16a34a; border-radius: 12px 12px 0 0; }}
+        .marked {{ background: #7c3aed; color: #ffffff; border-color: #7c3aed; border-radius: 50%; }}
+        .answeredmarked {{ background: #7c3aed; color: #ffffff; border-color: #7c3aed; border-radius: 50%; position: relative; overflow: visible; }}
         .answeredmarked::after {{
             content: ''; position: absolute; bottom: -2px; right: -2px; width: 8px; height: 8px;
             background-color: #2bc765; border-radius: 50%; border: 1px solid white; z-index: 3;
         }}
-        .current {{ outline: 3px solid #2563eb; outline-offset: 2px; transform: scale(1.05); z-index: 2; }}
+        .current {{ outline: 3px solid #2563eb; outline-offset: 2px; transform: scale(1.04); z-index: 2; box-shadow: 0 0 0 2px #dbeafe; }}
         </style>
         </head>
         <body>
@@ -1455,6 +1624,12 @@ def render_exam():
                             if(window.hiddenMap[idx]) window.hiddenMap[idx].click();
                         }}
                     }});
+                    item.addEventListener('keydown', function(event) {{
+                        if (event.key === 'Enter' || event.key === ' ') {{
+                            event.preventDefault();
+                            item.click();
+                        }}
+                    }});
                 }});
             }});
         </script>
@@ -1475,13 +1650,21 @@ def render_exam():
 
     # ================== LEFT PANEL ==================
     with col_main:
-        st.markdown(f"<h2 style='color:#4F46E5 !important; margin-top:0;'>{st.session_state.topic}</h2>", unsafe_allow_html=True)
-        st.write("---")
+        st.markdown(f"<p class='exam-kicker'>Live assessment &middot; {st.session_state.topic}</p>", unsafe_allow_html=True)
+        st.progress((q_idx + 1) / total_q, text=f"Question {q_idx + 1} of {total_q}")
         
         raw_q = q_data['q']
         clean_q = re.sub(r'^[Qq]?(?:uestion)?\s*\d+[\.\)]\s*', '', raw_q)
         
-        st.markdown(f"<div style='font-size: 1.3rem; font-weight: 600; line-height: 1.6; color: #1e293b; margin-bottom: 15px;'>Q{q_idx + 1}. {clean_q}</div>", unsafe_allow_html=True)
+        st.markdown(
+            f"""
+            <section class="question-card">
+                <span class="question-card__number">Question {q_idx + 1} of {total_q}</span>
+                <p class="question-card__text">{clean_q}</p>
+            </section>
+            """,
+            unsafe_allow_html=True,
+        )
         
         # --- FEATURE: DYNAMIC QUESTION TYPE RENDERING ---
         if q_data.get('type') == 'match':
@@ -1524,7 +1707,7 @@ def render_exam():
                 label_visibility="collapsed"
             )
             
-        st.write("<br><br>", unsafe_allow_html=True)
+        st.write("<br>", unsafe_allow_html=True)
         
         b_col1, b_col2, b_col3, b_col4 = st.columns([1.5, 1.5, 2.5, 1.5])
         
@@ -1552,21 +1735,36 @@ def render_result():
     correct, incorrect, unanswered, negative, final_score = calculate_detailed_score(test_key)
     attempted = total_q - unanswered
     
-    st.markdown("<h1 style='color: #4F46E5; text-align: center;'>🏆 Performance Analysis</h1>", unsafe_allow_html=True)
-    st.divider()
-    
+    accuracy = round((correct / attempted * 100) if attempted > 0 else 0, 1)
+    percentage = round((final_score / total_q) * 100, 2) if total_q > 0 else 0
+
+    render_page_header(
+        "Performance Analysis",
+        f"{st.session_state.topic} &middot; Your result is ready for review.",
+        "Test complete",
+    )
+
     c1, c2, c3, c4 = st.columns(4)
     with c1:
-        st.info(f"### 📝 Attempted\n# {attempted} / {total_q}")
+        render_metric_card("Final score", f"{final_score:.2f}", "blue", f"Out of {total_q} questions")
     with c2:
-        st.success(f"### ✅ Correct\n# {correct} / {total_q}")
+        render_metric_card("Percentage", f"{percentage:.2f}%", "purple", "Based on final score")
     with c3:
-        st.error(f"### ⛔ Penalty\n# -{negative:.2f}")
+        render_metric_card("Accuracy", f"{accuracy:.1f}%", "green", "Correct out of attempted")
     with c4:
-        accuracy = round((correct / attempted * 100) if attempted > 0 else 0, 1)
-        st.warning(f"### 🎯 Final Score\n# {final_score:.2f}")
-        
-    st.write("<br><br>", unsafe_allow_html=True)
+        render_metric_card("Attempted", f"{attempted} / {total_q}", "amber", f"{unanswered} unattempted")
+
+    c5, c6, c7, c8 = st.columns(4)
+    with c5:
+        render_metric_card("Correct", str(correct), "green", "Answers scored correct")
+    with c6:
+        render_metric_card("Incorrect", str(incorrect), "red", "Answers scored incorrect")
+    with c7:
+        render_metric_card("Unattempted", str(unanswered), "amber", "Questions left blank")
+    with c8:
+        render_metric_card("Negative marks", f"-{negative:.2f}", "red", "Deduction applied")
+
+    st.write("<br>", unsafe_allow_html=True)
     st.markdown("### 📋 Detailed Answer Key")
     st.write("---")
     
