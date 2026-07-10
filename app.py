@@ -38,6 +38,7 @@ DEFAULT_STRUCTURE = {
     "Science": ["Physics", "Chemistry", "Biology", "Environment"],
     "Arts": ["History", "Polity", "Geography", "Economics"],
     "Statistics": []
+    "Current affairs": []
 }
 
 for base_folder in [CSV_FOLDER, ADVANCED_CSV_FOLDER]:
