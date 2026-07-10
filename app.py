@@ -57,14 +57,8 @@ for base_folder in [CSV_FOLDER, ADVANCED_CSV_FOLDER]:
         for sub_cat in sub_cats:
             os.makedirs(os.path.join(root_path, sub_cat), exist_ok=True)
 
-# File Paths for remaining metadata (Will be shifted to cloud next)
-ATTEMPTS_FILE = 'attempts_data.json'
-TIMERS_FILE = 'timers_data.json'
-NEG_MARK_FILE = 'negative_marking_data.json'
-HISTORY_FILE = 'history_data.json' # Kept only as a deep fallback
-
 # ==========================================
-# DATA MANAGEMENT FUNCTIONS
+# DATA MANAGEMENT FUNCTIONS (CLOUD BASED)
 # ==========================================
 
 def get_all_users():
@@ -176,24 +170,76 @@ def get_all_supabase_history():
     except Exception as e:
         print(f"Error fetching all history from Supabase: {e}")
         return {}
-# ------------------------------------
 
-def load_neg_mark():
-    if not os.path.exists(NEG_MARK_FILE): return {}
-    with open(NEG_MARK_FILE, 'r') as f:
-        try: return json.load(f)
-        except: return {}
-
-def save_neg_mark(data):
-    with open(NEG_MARK_FILE, 'w') as f: json.dump(data, f, indent=4)
+# --- CLOUD FUNCTIONS FOR SETTINGS (Penalties, Timers, Attempts) ---
 
 def get_neg_mark(test_key):
-    return load_neg_mark().get(test_key, 0.0)
+    try:
+        res = supabase.table('test_penalties').select('penalty').eq('test_file', test_key).execute()
+        if res.data: 
+            return float(res.data[0]['penalty'])
+    except: pass
+    return 0.0
 
 def set_neg_mark(test_key, value):
-    data = load_neg_mark()
-    data[test_key] = value
-    save_neg_mark(data)
+    try:
+        res = supabase.table('test_penalties').select('id').eq('test_file', test_key).execute()
+        if res.data:
+            supabase.table('test_penalties').update({'penalty': float(value)}).eq('id', res.data[0]['id']).execute()
+        else:
+            supabase.table('test_penalties').insert({'test_file': test_key, 'penalty': float(value)}).execute()
+    except Exception as e: 
+        print(f"Error setting neg mark: {e}")
+
+def get_timer_config(test_key):
+    try:
+        res = supabase.table('test_timers').select('*').eq('test_file', test_key).execute()
+        if res.data:
+            return {"mode": res.data[0]['mode'], "value": res.data[0]['value']}
+    except: pass
+    return {"mode": "Total Time", "value": 30}
+
+def set_timer_config(test_key, mode, value):
+    try:
+        res = supabase.table('test_timers').select('id').eq('test_file', test_key).execute()
+        if res.data:
+            supabase.table('test_timers').update({'mode': mode, 'value': value}).eq('id', res.data[0]['id']).execute()
+        else:
+            supabase.table('test_timers').insert({'test_file': test_key, 'mode': mode, 'value': value}).execute()
+    except Exception as e:
+        print(f"Error setting timer: {e}")
+
+def get_attempt_data(user, test_file):
+    try:
+        res = supabase.table('user_attempts').select('*').eq('username', user).eq('test_file', test_file).execute()
+        if res.data: 
+            return {'allowed': res.data[0]['allowed'], 'used': res.data[0]['used']}
+    except: pass
+    return {'allowed': 2, 'used': 0}
+
+def increment_attempt(user, test_file):
+    curr = get_attempt_data(user, test_file)
+    try:
+        res = supabase.table('user_attempts').select('id').eq('username', user).eq('test_file', test_file).execute()
+        if res.data:
+            supabase.table('user_attempts').update({'used': curr['used'] + 1}).eq('id', res.data[0]['id']).execute()
+        else:
+            supabase.table('user_attempts').insert({'username': user, 'test_file': test_file, 'allowed': curr['allowed'], 'used': curr['used'] + 1}).execute()
+    except Exception as e:
+        print(f"Error incrementing attempt: {e}")
+
+def set_allowed_attempts(user, test_file, allowed_count):
+    curr = get_attempt_data(user, test_file)
+    try:
+        res = supabase.table('user_attempts').select('id').eq('username', user).eq('test_file', test_file).execute()
+        if res.data:
+            supabase.table('user_attempts').update({'allowed': allowed_count}).eq('id', res.data[0]['id']).execute()
+        else:
+            supabase.table('user_attempts').insert({'username': user, 'test_file': test_file, 'allowed': allowed_count, 'used': curr['used']}).execute()
+    except Exception as e:
+        print(f"Error setting allowed attempts: {e}")
+
+# ------------------------------------
 
 @st.cache_data(ttl=2)
 def get_all_csv_files(base_dir=CSV_FOLDER):
@@ -215,35 +261,6 @@ def nav_admin_down(folder):
     curr = st.session_state.admin_current_path
     if curr: st.session_state.admin_current_path = curr + '/' + folder
     else: st.session_state.admin_current_path = folder
-
-def load_attempts_data():
-    if not os.path.exists(ATTEMPTS_FILE): return {}
-    with open(ATTEMPTS_FILE, 'r') as f:
-        try: return json.load(f)
-        except: return {}
-
-def save_attempts_data(data):
-    with open(ATTEMPTS_FILE, 'w') as f: json.dump(data, f, indent=4)
-
-def get_attempt_data(user, test_file):
-    data = load_attempts_data()
-    if user not in data: data[user] = {}
-    if test_file not in data[user]: data[user][test_file] = {'allowed': 2, 'used': 0}
-    return data[user][test_file]
-
-def increment_attempt(user, test_file):
-    data = load_attempts_data()
-    if user not in data: data[user] = {}
-    if test_file not in data[user]: data[user][test_file] = {'allowed': 2, 'used': 0}
-    data[user][test_file]['used'] += 1
-    save_attempts_data(data)
-
-def set_allowed_attempts(user, test_file, allowed_count):
-    data = load_attempts_data()
-    if user not in data: data[user] = {}
-    if test_file not in data[user]: data[user][test_file] = {'allowed': 2, 'used': 0}
-    data[user][test_file]['allowed'] = allowed_count
-    save_attempts_data(data)
 
 def record_detailed_attempt(user, test_key, original_file):
     correct, incorrect, unanswered, negative, final_score = calculate_detailed_score(test_key)
@@ -349,15 +366,6 @@ def record_attempt_usage():
                 st.session_state.history_view_index = 0
             
         st.session_state.attempt_recorded = True
-
-def load_timers_data():
-    if not os.path.exists(TIMERS_FILE): return {}
-    with open(TIMERS_FILE, 'r') as f:
-        try: return json.load(f)
-        except: return {}
-
-def save_timers_data(data):
-    with open(TIMERS_FILE, 'w') as f: json.dump(data, f, indent=4)
 
 # ==========================================
 # 2. STATE INITIALIZATION
@@ -482,8 +490,7 @@ def load_quiz(file_name):
                         'options': opts, 'ans': int(ans_str) - 1 if ans_str.isdigit() else -1
                     })
                 
-        timers_data = load_timers_data()
-        t_config = timers_data.get(test_key, {"mode": "Total Time", "value": 30})
+        t_config = get_timer_config(test_key)
         
         if t_config["mode"] == "No Timer": t_mode = "No Timer"; t_val = 0; rem_sec = 0
         elif t_config["mode"] == "Per Question":
@@ -745,7 +752,6 @@ def render_user_queries():
     st.markdown("<h2 style='font-weight:800;'>Support Center & Queries</h2>", unsafe_allow_html=True)
     st.write("---")
     
-    # CLOUD FIX: Fetch queries directly from Supabase
     try:
         res = supabase.table('user_queries').select('*').execute()
         queries = sorted(res.data, key=lambda x: x.get('datetime', ''))
@@ -773,7 +779,6 @@ def render_user_queries():
                 if st.button("Mark as Resolved & Send", key=f"btn_resolve_{q['id']}", type="primary"):
                     if reply_input.strip():
                         with st.spinner("Updating status..."):
-                            # CLOUD FIX: Update query reply directly to Supabase
                             try:
                                 supabase.table('user_queries').update({
                                     "reply": reply_input, 
@@ -897,13 +902,11 @@ def render_admin():
         if admin_file_options:
             sel_display = st.selectbox("Select Assessment", list(admin_file_options.keys()), key="tmr_test")
             t_file = admin_file_options[sel_display]
-            curr_set = load_timers_data().get(t_file, {"mode": "Total Time", "value": 30})
+            curr_set = get_timer_config(t_file)
             new_mode = st.radio("Timing Rule", ["Total Time", "Per Question", "No Timer"], index=["Total Time", "Per Question", "No Timer"].index(curr_set["mode"]))
             new_val = st.number_input("Value", min_value=1, value=curr_set.get("value", 30)) if new_mode != "No Timer" else 0
             if st.button("Save Configuration", type="primary"):
-                td = load_timers_data()
-                td[t_file] = {"mode": new_mode, "value": new_val}
-                save_timers_data(td)
+                set_timer_config(t_file, new_mode, new_val)
                 st.toast("Updated!", icon="✅")
 
     with st.expander("👥 User Management", expanded=False):
@@ -994,7 +997,6 @@ def render_admin():
                 
                 st.markdown("#### 💬 Admin Feedback & Suggestions")
                 
-                # CLOUD FIX: Fetch feedback directly from Supabase
                 current_fb = ""
                 try:
                     fb_res = supabase.table('user_feedback').select('feedback').eq('username', sel_u).execute()
@@ -1005,7 +1007,6 @@ def render_admin():
                 new_fb = st.text_area("Write personalized feedback for this user:", value=current_fb, height=120)
                 
                 if st.button("Save Feedback", type="primary", key=f"save_fb_{sel_u}"):
-                    # CLOUD FIX: Upsert feedback directly to Supabase
                     try:
                         supabase.table('user_feedback').upsert({
                             "username": sel_u,
@@ -1059,7 +1060,6 @@ def render_dashboard_performance():
     st.markdown("<h2 style='font-weight:800;'>📈 Performance Analytics</h2>", unsafe_allow_html=True)
     st.write("---")
     
-    # CLOUD FIX: Fetch student's feedback from Supabase
     user_fb = ""
     try:
         fb_res = supabase.table('user_feedback').select('feedback').eq('username', st.session_state.current_user).execute()
@@ -1125,7 +1125,6 @@ def render_dashboard_ask_query():
             elif wc > 100: st.error("Limit exceeded.")
             else:
                 with st.spinner("Submitting to Cloud Database..."):
-                    # CLOUD FIX: Insert new query directly to Supabase
                     try:
                         supabase.table('user_queries').insert({
                             "id": str(uuid.uuid4()), 
@@ -1141,7 +1140,6 @@ def render_dashboard_ask_query():
                     
     st.markdown("#### Your Query History")
     
-    # CLOUD FIX: Read user's own queries directly from Supabase
     try:
         res = supabase.table('user_queries').select('*').eq('username', st.session_state.current_user).execute()
         my_qs = sorted(res.data, key=lambda x: x.get('datetime', ''))
