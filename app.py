@@ -254,6 +254,7 @@ def get_attempt_data(user, test_file):
         if res.data: 
             return {'allowed': res.data[0]['allowed'], 'used': res.data[0]['used']}
     except: pass
+    # Feature Update: Default limit changed to 5
     return {'allowed': 5, 'used': 0}
 
 def increment_attempt(user, test_file):
@@ -395,11 +396,11 @@ def record_detailed_attempt(user, test_key, original_file):
             "percentage": attempt_data["percentage"],
             "datetime": attempt_data["datetime"],
             # BUG 1 FIX: Passed directly as a list/dict object.
-            # Supabase handles jsonb serialization natively. Passing json.dumps() causes silent DB failures.
             "q_details": attempt_data["q_details"]
         }
         supabase.table("test_results").insert(supabase_data).execute()
     except Exception as e:
+        st.session_state.db_save_error = str(e)
         print(f"Failed to sync result to Supabase: {e}")
 
 def record_attempt_usage():
@@ -418,6 +419,34 @@ def record_attempt_usage():
                 st.session_state.history_view_index = 0
             
         st.session_state.attempt_recorded = True
+
+def destroy_active_assessment():
+    """Completely clears the active assessment state and destroys any resume sessions."""
+    st.session_state.quiz_ready = False
+    st.session_state.questions = []
+    st.session_state.current_q = 0
+    st.session_state.user_answers = {}
+    st.session_state.visited_questions = set()
+    st.session_state.marked_questions = set()
+    st.session_state.topic = ""
+    st.session_state.timer_mode = "No Timer"
+    st.session_state.time_val = 0
+    st.session_state.remaining_seconds = 0
+    st.session_state.last_calc_time = 0
+    st.session_state.last_interaction_time = 0
+    st.session_state.is_paused = False
+    st.session_state.current_test_filename = ""
+    st.session_state.attempt_recorded = False
+
+    # Invalidate the resume session file so it can't be restored
+    sid = st.session_state.get("sid")
+    if sid:
+        session_path = os.path.join(SESSION_FOLDER, f"{sid}.pkl")
+        if os.path.exists(session_path):
+            try:
+                os.remove(session_path)
+            except:
+                pass
 
 # ==========================================
 # 2. STATE INITIALIZATION
@@ -467,6 +496,7 @@ def passive_time_check():
             st.session_state.remaining_seconds = 0
             st.session_state.active_page = "Result"
             record_attempt_usage()
+            destroy_active_assessment()
             st.rerun()
 
     inactive_duration = now - st.session_state.get('last_interaction_time', now)
@@ -616,6 +646,7 @@ def nav_submit():
     record_activity()
     if not st.session_state.is_paused:
         record_attempt_usage()
+        destroy_active_assessment()
         st.session_state.active_page = "Result"
 
 def pause_exam():
@@ -1474,7 +1505,7 @@ def render_result():
     # FIX: Display Supabase Database Errors if the insertion failed during submission
     if st.session_state.get('db_save_error'):
         st.error(f"⚠️ Critical Database Error: Could not save your result. Error details: {st.session_state.db_save_error}")
-        st.warning("Admin Hint: Go to Supabase -> Table Editor -> 'test_results'. Make sure **Row Level Security (RLS)** is Disabled, and all 14 columns exist with exact names/types.")
+        st.warning("Admin Hint: Go to Supabase -> Table Editor -> 'test_results'. Make sure **Row Level Security (RLS)** is Disabled, and all columns exist with exact names/types.")
         st.session_state.db_save_error = None # Clear error after showing
 
     history = get_supabase_history(st.session_state.current_user)
