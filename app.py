@@ -34,14 +34,51 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Initialize Session Folder for Pause/Resume Persistence
+# Initialize Session Folder for Pause/Resume Persistence only
+# (Temporary sessions are fine to lose on server restart, so we keep this local)
 SESSION_FOLDER = 'active_sessions'
 if not os.path.exists(SESSION_FOLDER):
     os.makedirs(SESSION_FOLDER)
 
+# Cloud Default Category Structure
+DEFAULT_STRUCTURE = {
+    "Science": ["Physics", "Chemistry", "Biology", "Environment"],
+    "Arts": ["History", "Polity", "Geography", "Economics"],
+    "Statistics": [],
+    "Current affairs": []
+}
+
 # ==========================================
 # DATA MANAGEMENT FUNCTIONS (CLOUD BASED)
 # ==========================================
+
+@st.cache_data(ttl=3600) # Checks only once per hour to save API calls
+def check_and_create_default_folders():
+    """Automatically seeds Supabase with the default folder structure if missing."""
+    try:
+        # Check if the basic 'Science' folder exists
+        res = supabase.table('question_banks').select('id').eq('folder_path', 'Science').execute()
+        if not res.data:
+            # If not found, generate all default folders for both banks
+            for bank_type in ["Basic", "Advanced"]:
+                for root_cat, sub_cats in DEFAULT_STRUCTURE.items():
+                    # Create root category folder
+                    supabase.table('question_banks').insert({
+                        'bank_type': bank_type, 
+                        'folder_path': root_cat, 
+                        'file_name': '.keep', 
+                        'csv_data': ''
+                    }).execute()
+                    # Create subcategory folders
+                    for sub_cat in sub_cats:
+                        supabase.table('question_banks').insert({
+                            'bank_type': bank_type, 
+                            'folder_path': f"{root_cat}/{sub_cat}", 
+                            'file_name': '.keep', 
+                            'csv_data': ''
+                        }).execute()
+    except Exception as e:
+        print(f"Error seeding default folders: {e}")
 
 def get_all_users():
     try:
@@ -79,7 +116,7 @@ def get_supabase_history(username):
         response = supabase.table('test_results').select("*").eq('username', username).execute()
         history = []
         
-        # Sort by datetime sequentially to match old graph progression logic
+        # Sort by datetime sequentially
         sorted_data = sorted(response.data, key=lambda x: x.get('datetime', ''))
 
         for row in sorted_data:
@@ -223,20 +260,30 @@ def set_allowed_attempts(user, test_file, allowed_count):
 
 # --- CLOUD CSV QUESTION BANK FUNCTIONS ---
 @st.cache_data(ttl=2)
-def get_all_csv_files(bank_type):
+def get_cloud_hierarchy(bank_type):
+    """Returns a list of unique folders and a list of file paths from Supabase"""
     try:
         res = supabase.table('question_banks').select('folder_path, file_name').eq('bank_type', bank_type).execute()
+        folders = set()
         files = []
         for r in res.data:
-            if r['file_name'] == '.keep': continue
-            if r['folder_path'] == 'Root':
-                files.append(r['file_name'])
-            else:
-                files.append(f"{r['folder_path']}/{r['file_name']}")
-        return sorted(files)
+            fp = r['folder_path']
+            if fp != 'Root':
+                folders.add(fp)
+                # Ensure parent is recorded if nested
+                parts = fp.split('/')
+                if len(parts) > 1:
+                    folders.add(parts[0])
+            
+            if r['file_name'] != '.keep':
+                if fp == 'Root':
+                    files.append(r['file_name'])
+                else:
+                    files.append(f"{fp}/{r['file_name']}")
+        return sorted(list(folders)), sorted(files)
     except Exception as e:
-        print(f"Error fetching CSVs: {e}")
-        return []
+        print(f"Error fetching Cloud Hierarchy: {e}")
+        return [], []
 
 def nav_admin_up():
     curr = st.session_state.admin_current_path
@@ -794,8 +841,12 @@ def render_admin():
     st.markdown("<h2 style='font-weight:800;'>⚙️ Admin Control Panel</h2>", unsafe_allow_html=True)
     st.write("---")
     
-    admin_file_options = {f"Basic | {f}": f for f in get_all_csv_files("Basic")}
-    admin_file_options.update({f"Advanced | {f}": f"ADVANCED|{f}" for f in get_all_csv_files("Advanced")})
+    # Safely fetch options for dropdowns
+    _, basic_files = get_cloud_hierarchy("Basic")
+    _, adv_files = get_cloud_hierarchy("Advanced")
+    
+    admin_file_options = {f"Basic | {f}": f for f in basic_files}
+    admin_file_options.update({f"Advanced | {f}": f"ADVANCED|{f}" for f in adv_files})
 
     with st.expander("⚙️ Assessment Access Control", expanded=False):
         users = get_all_users()
@@ -870,7 +921,7 @@ def render_admin():
         for folder in subfolders:
             with st.container(border=True):
                 fc1, fc2, fc3, fc4 = st.columns([3, 4, 2, 2])
-                fc1.button(f"📁 {folder}", key=f"nav_{current_path}_{folder}", on_click=nav_admin_down, args=(f"Root/{folder}" if current_path=='Root' else f"{current_path}/{folder}",), use_container_width=True)
+                fc1.button(f"📁 {folder}", key=f"nav_{current_path}_{folder}", on_click=nav_admin_down, args=(f"{folder}" if current_path=='Root' else f"{current_path}/{folder}",), use_container_width=True)
                 
                 new_fn = fc2.text_input("Rename", value=folder, key=f"ren_fld_{current_path}_{folder}", label_visibility="collapsed")
                 if fc3.button("✏️ Rename", key=f"rn_btn_{current_path}_{folder}", use_container_width=True):
@@ -1065,17 +1116,20 @@ def render_dashboard_practice():
     st.session_state.current_bank = st.radio("Question Bank", ["Basic", "Advanced"], horizontal=True, label_visibility="collapsed")
     
     active_base = st.session_state.current_bank
-    all_files = get_all_csv_files(active_base)
+    folders, all_files = get_cloud_hierarchy(active_base)
     
     search_q = st.text_input("🔍 Search Subject or Folder...", placeholder="e.g. Physics, Mock 1...").strip().lower()
-    if search_q: files_to_disp = [f for f in all_files if search_q in f.lower()]
+    
+    if search_q: 
+        files_to_disp = [f for f in all_files if search_q in f.lower()]
     else:
         c1, c2 = st.columns(2)
-        root_flds = sorted(list(set(f.split('/')[0] for f in all_files if '/' in f)))
+        # Display top-level root folders
+        root_flds = sorted(list(set(f.split('/')[0] for f in folders)))
         sel_cat = c1.selectbox("Category", ["All"] + root_flds) if root_flds else "All"
         
         if sel_cat != "All":
-            sub_flds = sorted(list(set(f.split('/')[1] for f in all_files if f.startswith(sel_cat + '/') and f.count('/') > 1)))
+            sub_flds = sorted(list(set(f.split('/')[1] for f in folders if f.startswith(sel_cat + '/') and f.count('/') >= 1)))
             sel_sub = c2.selectbox("Subcategory", ["All"] + sub_flds) if sub_flds else "All"
             prefix = sel_cat + '/' if sel_sub == "All" else f"{sel_cat}/{sel_sub}/"
             files_to_disp = [f for f in all_files if f.startswith(prefix)]
@@ -1414,6 +1468,9 @@ def render_result():
 # 7. MAIN APPLICATION LOOP
 # ==========================================
 def main():
+    # Force cloud folder creation check immediately upon starting
+    check_and_create_default_folders()
+    
     init_session()
     passive_time_check()
     inject_custom_css()
