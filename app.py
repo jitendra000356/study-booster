@@ -839,7 +839,13 @@ def render_login():
             st.markdown("<h1 style='text-align:center; font-weight:800; margin-bottom:0.2rem;'>Study Booster</h1>", unsafe_allow_html=True)
             st.markdown("<p style='text-align:center; font-size:1rem; margin-top:0; opacity:0.8;'>Your focused space for practice and progress.</p>", unsafe_allow_html=True)
             st.divider()
-            username = st.selectbox("👤 Select Profile", ["-- Select User --"] + list(users.keys()))
+            
+            # FIX: Sort users alphabetically but keep Admin at the top
+            admin_users = sorted([u for u in users.keys() if "Admin" in u])
+            student_users = sorted([u for u in users.keys() if "Admin" not in u], key=lambda x: x.lower())
+            dropdown_options = ["-- Select User --"] + admin_users + student_users
+            
+            username = st.selectbox("👤 Select Profile", dropdown_options)
             pwd = st.text_input("🔑 Enter Passcode", type="password")
             st.write("<br>", unsafe_allow_html=True)
             if st.button("Secure Login 🚀", type="primary", use_container_width=True):
