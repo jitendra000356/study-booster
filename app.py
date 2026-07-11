@@ -62,54 +62,54 @@ for base_folder in [CSV_FOLDER, ADVANCED_CSV_FOLDER]:
     for root_cat, sub_cats in DEFAULT_STRUCTURE.items():
         root_path = os.path.join(base_folder, root_cat)
         os.makedirs(root_path, exist_ok=True)
-        for sub_cat in sub_cats:
-            os.makedirs(os.path.join(root_path, sub_cat), exist_ok=True)
-
-ATTEMPTS_FILE = 'attempts_data.json'
-TIMERS_FILE = 'timers_data.json'
-USERS_FILE = 'users_data.json'
-HISTORY_FILE = 'history_data.json'
-NEG_MARK_FILE = 'negative_marking_data.json'
-QUERIES_FILE = 'queries_data.json'
-FEEDBACK_FILE = 'feedback_data.json' # Feature 1: Added Feedback File
-
-# Existing Authentication mapping
-ALLOWED_USERS = {
-    "Jitendra (Admin)": "Admin@1996", 
-    "Jili (Student)": "Jili@1999", 
-    "Satish (Student)": "Satish@2004", 
-    "Binita (Student)": "Bini@1993", 
-    "Arvind (Student)": "Arvind@1994", 
-    "Gaurav (Kalu)": "Kalu@1997", 
-    "Pankaj (Student)": "Pankaj@123", 
-    "Pappu (Student)": "Pappu@123"
-}
-
-# ==========================================
-# DATA MANAGEMENT FUNCTIONS
-# ==========================================
+def check_and_create_default_folders():
+    """Automatically seeds Supabase with the default folder structure if missing."""
+    if st.session_state.get('folders_checked', False):
+        return
+        
+    try:
+        # Check if the table is completely empty to prevent recreating defaults if renamed
+        res = supabase.table('question_banks').select('id').limit(1).execute()
+        if not res.data:
+            # If completely empty, generate all default folders for both banks
+            for bank_type in ["Basic", "Advanced"]:
+                for root_cat, sub_cats in DEFAULT_STRUCTURE.items():
+                    # Create root category folder
+                    supabase.table('question_banks').insert({
+                        'bank_type': bank_type, 
+                        'folder_path': root_cat, 
+                        'file_name': '.keep', 
+                        'csv_data': ''
+                    }).execute()
+                    # Create subcategory folders
+                    for sub_cat in sub_cats:
+                        supabase.table('question_banks').insert({
+                            'bank_type': bank_type, 
+                            'folder_path': f"{root_cat}/{sub_cat}", 
+                            'file_name': '.keep', 
+                            'csv_data': ''
+                        }).execute()
+        st.session_state.folders_checked = True
+    except Exception as e:
+        st.error(f"⚠️ Supabase Folder Generation Error: {e} (Hint: Check if RLS is disabled on 'question_banks' table!)")
 
 def get_all_users():
     try:
-        # Supabase database se users table ka data laana
         response = supabase.table('users').select("*").execute()
-        
-        # Purane dictionary format mein convert karna taaki aapka login system break na ho
         users_dict = {}
         for row in response.data:
             users_dict[row['username']] = row['password']
             
-        # Agar table khali hai, toh kam se kam ek Admin account default de do
-        if not users_dict:
-            return {"Jitendra (Admin)": "Admin@1996"}
+        # FIX: Master Admin ko hamesha list mein rakhein taaki aap kabhi lock out na hon!
+        if "Jitendra (Admin)" not in users_dict:
+            users_dict["Jitendra (Admin)"] = "Admin@1996"
             
         return users_dict
     except Exception as e:
         st.error(f"Database Connection Error: {e}")
-        return {"Jitendra (Admin)": "Admin@1996"} # Fallback
+        return {"Jitendra (Admin)": "Admin@1996"}
 
 def add_new_user_to_db(username, password):
-    # Naya user database me save karne ke liye
     try:
         data = {"username": username, "password": password, "role": "Student"}
         supabase.table('users').insert(data).execute()
